@@ -15,11 +15,17 @@ MIMPIRUN_SRC := $(MIMPI_COMMON_SRC) mimpirun.c
 
 MIMPI_SRC := $(MIMPI_COMMON_SRC) mimpi.c mimpi.h
 
-#all: mimpirun $(EXAMPLES) $(TESTS)
-all: mimpirun # $(EXAMPLES) $(TESTS)
+# all: mimpirun $(EXAMPLES) $(TESTS)
+all: mimpirun
+all: test
 
 mimpirun: $(MIMPIRUN_SRC)
 	gcc $(CFLAGS) -o $@ $(filter %.c,$^)
+
+
+test: test.c $(MIMPI_SRC)
+	gcc $(CFLAGS) -o $@ $(filter %.c,$^)
+
 
 # examples_build/%: examples/%.c $(MIMPI_SRC)
 # 	mkdir -p examples_build
@@ -30,3 +36,4 @@ mimpirun: $(MIMPIRUN_SRC)
 
 clean:
 	rm -rf mimpirun assignment.zip examples_build
+

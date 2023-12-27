@@ -1,12 +1,37 @@
+#include <stdlib.h>
 #include "stdio.h"
+#include "mimpi.h"
 
 int main(int argc, char **argv) {
-    sleep(1);
-    printf("arc: %d\n", argc);
-    for(int i = 0; i < argc; i++) {
-        printf("argv[%d]: %s\n", i, argv[i]);
-    }
+    // sleep(1);
+    // printf("arc: %d\n", argc);
+    // for(int i = 0; i < argc; i++) {
+    //     printf("argv[%d]: %s\n", i, argv[i]);
+    // }
+    // char *xd = getenv("MIMPI_RANK");
+    // printf("xd: %s\n", xd);
+    //printf("Hello world\n");
+    MIMPI_Init(0);
+    printf("rank: %d\n", MIMPI_World_rank());
+
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // #include <stdio.h>
 // #include <stdlib.h>

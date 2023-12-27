@@ -39,17 +39,17 @@ void MIMPI_Init(bool enable_deadlock_detection);
 /// After a process has called this function, all MIMPI interaction with it
 /// (e.g. sending data to it) should return `MIMPI_ERROR_REMOTE_FINISHED`.
 ///
-void MIMPI_Finalize();
+// void MIMPI_Finalize();
 
 /// @brief Returns the number of processes launched by `mimpirun`.
-int MIMPI_World_size();
+// int MIMPI_World_size();
 
 /// @brief Returns the identifier of this process.
 ///
 /// The identifier is unique processes launched by `mimpirun`.
 /// Identifiers should be consecutive natural numbers.
 ///
-int MIMPI_World_rank();
+// int MIMPI_World_rank();
 
 /// @brief Sends data to the specified process.
 ///
@@ -69,12 +69,12 @@ int MIMPI_World_rank();
 ///         - `MIMPI_ERROR_REMOTE_FINISHED` if the process with rank
 ///         - @ref destination has already escaped _MPI block_.
 ///
-MIMPI_Retcode MIMPI_Send(
-    void const *data,
-    int count,
-    int destination,
-    int tag
-);
+// MIMPI_Retcode MIMPI_Send(
+//     void const *data,
+//     int count,
+//     int destination,
+//     int tag
+// );
 
 /// @brief Receives data from the specified process.
 ///
@@ -96,12 +96,12 @@ MIMPI_Retcode MIMPI_Send(
 ///         - `MIMPI_ERROR_DEADLOCK_DETECTED` if a deadlock has been detected
 ///           and therefore this call would else never return.
 ///
-MIMPI_Retcode MIMPI_Recv(
-    void *data,
-    int count,
-    int source,
-    int tag
-);
+// MIMPI_Retcode MIMPI_Recv(
+//     void *data,
+//     int count,
+//     int source,
+//     int tag
+// );
 
 /// @brief Synchronises all processes.
 ///
@@ -117,7 +117,7 @@ MIMPI_Retcode MIMPI_Recv(
 ///         - `MIMPI_ERROR_DEADLOCK_DETECTED` if a deadlock has been detected
 ///           and therefore this call would else never return.
 ///
-MIMPI_Retcode MIMPI_Barrier();
+// MIMPI_Retcode MIMPI_Barrier();
 
 /// @brief Broadcasts data to all processes.
 ///
@@ -139,11 +139,11 @@ MIMPI_Retcode MIMPI_Barrier();
 ///         - `MIMPI_ERROR_DEADLOCK_DETECTED` if a deadlock has been detected
 ///           and therefore this call would else never return.
 ///
-MIMPI_Retcode MIMPI_Bcast(
-    void *data,
-    int count,
-    int root
-);
+// MIMPI_Retcode MIMPI_Bcast(
+//     void *data,
+//     int count,
+//     int root
+// );
 
 /// @brief Reduces data from all processes to one.
 ///
@@ -167,12 +167,12 @@ MIMPI_Retcode MIMPI_Bcast(
 ///         - `MIMPI_ERROR_DEADLOCK_DETECTED` if a deadlock has been detected
 ///           and therefore this call would else never return.
 ///
-MIMPI_Retcode MIMPI_Reduce(
-    void const *send_data,
-    void *recv_data,
-    int count,
-    MIMPI_Op op,
-    int root
-);
+// MIMPI_Retcode MIMPI_Reduce(
+//     void const *send_data,
+//     void *recv_data,
+//     int count,
+//     MIMPI_Op op,
+//     int root
+// );
 
 #endif /* MIMPI_H */
