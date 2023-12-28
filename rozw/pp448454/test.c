@@ -3,17 +3,19 @@
 #include "mimpi.h"
 
 int main(int argc, char **argv) {
-    // sleep(1);
-    // printf("arc: %d\n", argc);
-    // for(int i = 0; i < argc; i++) {
-    //     printf("argv[%d]: %s\n", i, argv[i]);
-    // }
-    // char *xd = getenv("MIMPI_RANK");
-    // printf("xd: %s\n", xd);
-    //printf("Hello world\n");
     MIMPI_Init(0);
-    // printf("rank: %d\n", MIMPI_World_rank());
-    // printf("size: %d\n", MIMPI_World_size());
+
+    int rank = MIMPI_World_rank();
+    if(rank == 0) {
+        MIMPI_Send("xd", 2, 1, 0);
+    }
+    else if(rank == 1) {
+        char buf[100];
+        MIMPI_Recv(buf, 100, 0, 0);
+        printf("buf: %s\n", buf);
+    }
+
+
     MIMPI_Finalize();
 
 }

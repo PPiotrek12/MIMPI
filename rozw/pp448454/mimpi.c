@@ -85,23 +85,15 @@ int MIMPI_World_rank() {
     return rank;
 }
 
-// MIMPI_Retcode MIMPI_Send(
-//     void const *data,
-//     int count,
-//     int destination,
-//     int tag
-// ) {
-//     TODO
-// }
+MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) {
+    write(from_me[destination], data, count);
+    return MIMPI_SUCCESS;
+}
 
-// MIMPI_Retcode MIMPI_Recv(
-//     void *data,
-//     int count,
-//     int source,
-//     int tag
-// ) {
-//     TODO
-// }
+MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
+    read(to_me[source], data, count);
+    return MIMPI_SUCCESS;
+}
 
 // MIMPI_Retcode MIMPI_Barrier() {
 //     TODO

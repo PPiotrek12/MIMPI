@@ -69,12 +69,12 @@ int MIMPI_World_rank();
 ///         - `MIMPI_ERROR_REMOTE_FINISHED` if the process with rank
 ///         - @ref destination has already escaped _MPI block_.
 ///
-// MIMPI_Retcode MIMPI_Send(
-//     void const *data,
-//     int count,
-//     int destination,
-//     int tag
-// );
+MIMPI_Retcode MIMPI_Send(
+    void const *data,
+    int count,
+    int destination,
+    int tag
+);
 
 /// @brief Receives data from the specified process.
 ///
@@ -96,12 +96,12 @@ int MIMPI_World_rank();
 ///         - `MIMPI_ERROR_DEADLOCK_DETECTED` if a deadlock has been detected
 ///           and therefore this call would else never return.
 ///
-// MIMPI_Retcode MIMPI_Recv(
-//     void *data,
-//     int count,
-//     int source,
-//     int tag
-// );
+MIMPI_Retcode MIMPI_Recv(
+    void *data,
+    int count,
+    int source,
+    int tag
+);
 
 /// @brief Synchronises all processes.
 ///
