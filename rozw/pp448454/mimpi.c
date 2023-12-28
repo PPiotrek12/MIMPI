@@ -93,14 +93,14 @@ void* wait_for_messages(void* arg) {
         int ret = read_whole_message(to_me[i], &count, 4);
         if (ret == -1) break;
 
-        char *data = NULL;
+        void *data = NULL;
         if (ret != -2) { // If there is any data to read.
             if (read_whole_message(to_me[i], &tag, 4) == -1) break;
 
-            char *data = (void *) malloc(count);
+            data = (void *) malloc(count);
             if (data == NULL)
                 ASSERT_SYS_OK(-1);
-                
+            
             if (read_whole_message(to_me[i], data, count) == -1) break;
         }
 
@@ -149,10 +149,8 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
     if (source >= n_processes || source < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    if (finished[source]) {
-        printf("wyszedl wczesniej\n");
+    if (finished[source])
         return MIMPI_ERROR_REMOTE_FINISHED;
-    }
         
     if (!search_for_message(data, count, source, tag)) {
         while(1) {
@@ -163,17 +161,19 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
             w_source = source;
 
             ASSERT_ZERO(pthread_cond_wait(&waiting_for_message_cond, &waiting_for_message));
+            if_waiting_for_message = false;
+            ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
+
+            if (search_for_message(data, count, source, tag)) 
+                return MIMPI_SUCCESS;
+
+            ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
             if (finished[source]) {
-                printf("wyszedl gdy czekalem\n");
                 if_waiting_for_message = false;
                 ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
                 return MIMPI_ERROR_REMOTE_FINISHED;
             }
-            if_waiting_for_message = false;
             ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
-
-            if (search_for_message(data, count, source, tag))
-                return MIMPI_SUCCESS;
         }
     }
     else 
@@ -348,27 +348,27 @@ int MIMPI_World_rank() {
 
 
 
-// MIMPI_Retcode MIMPI_Barrier() {
-//     TODO
-// }
+MIMPI_Retcode MIMPI_Barrier() {
+//    TODO
+}
 
-// MIMPI_Retcode MIMPI_Bcast(
-//     void *data,
-//     int count,
-//     int root
-// ) {
-//     TODO
-// }
+MIMPI_Retcode MIMPI_Bcast(
+    void *data,
+    int count,
+    int root
+) {
+  //  TODO
+}
 
-// MIMPI_Retcode MIMPI_Reduce(
-//     void const *send_data,
-//     void *recv_data,
-//     int count,
-//     MIMPI_Op op,
-//     int root
-// ) {
-//     TODO
-// }
+MIMPI_Retcode MIMPI_Reduce(
+    void const *send_data,
+    void *recv_data,
+    int count,
+    MIMPI_Op op,
+    int root
+) {
+    //TODO
+}
 
 
 

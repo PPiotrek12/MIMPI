@@ -17,13 +17,13 @@ MIMPI_SRC := $(MIMPI_COMMON_SRC) mimpi.c mimpi.h
 
 # all: mimpirun $(EXAMPLES) $(TESTS)
 all: mimpirun
-all: test
+all: test1
 
 mimpirun: $(MIMPIRUN_SRC)
 	gcc $(CFLAGS) -o $@ $(filter %.c,$^) -lpthread
 
 
-test: test.c $(MIMPI_SRC)
+test1: test1.c $(MIMPI_SRC)
 	gcc $(CFLAGS) -o $@ $(filter %.c,$^) -lpthread
 
 

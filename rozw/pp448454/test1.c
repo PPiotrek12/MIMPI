@@ -1,47 +1,31 @@
-#include <stdlib.h>
-#include "stdio.h"
+#include <stdbool.h>
+#include <stdio.h>
 #include "mimpi.h"
-#include "mimpi_common.h"
-#include "string.h"
-#include <sys/types.h>
-#include <unistd.h>
-#include <pthread.h>
-//#include "channel.h"
 
 
-int main(int argc, char **argv) {
-    MIMPI_Init(0);
-    int rank = MIMPI_World_rank();
+int main(int argc, char **argv)
+{ 
+    MIMPI_Init(false);
 
-    int size = 100;
-    char send[size];
-    for(int i = 0; i < size; i++)
-        send[i] = 'a';
+    int const world_rank = MIMPI_World_rank();
 
-    if(rank == 0) { 
-        //sleep(1);
-        //MIMPI_Send(send, size, 1, 2137);
+    int const tag = 17;
 
+    char number;
+    if (world_rank == 0)
+    {
+        number = 42;
+        MIMPI_Send(&number, 1, 1, tag);
     }
-    else if(rank == 1) {
-        //sleep(3);
-        char buf[size + 10];
-    //    sleep(1);
-        MIMPI_Recv(buf, size, 0, 2137);
-        int ile = 0;
-        for(int i = 0; i < size; i++)
-            if(buf[i] == 'a')
-                ile++;
-        printf("ile: %d\n", ile);
-        
-        printf("buf: %s\n", buf);
+    else if (world_rank == 1)
+    {
+        MIMPI_Recv(&number, 1, 0, tag);
+        printf("Process 1 received number %d from process 0\n", number);
     }
 
-    sleep(2);
     MIMPI_Finalize();
+    return 0;
 }
-
-
 
 
 

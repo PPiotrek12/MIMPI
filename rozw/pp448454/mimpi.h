@@ -117,7 +117,7 @@ MIMPI_Retcode MIMPI_Recv(
 ///         - `MIMPI_ERROR_DEADLOCK_DETECTED` if a deadlock has been detected
 ///           and therefore this call would else never return.
 ///
-// MIMPI_Retcode MIMPI_Barrier();
+MIMPI_Retcode MIMPI_Barrier();
 
 /// @brief Broadcasts data to all processes.
 ///
@@ -139,11 +139,11 @@ MIMPI_Retcode MIMPI_Recv(
 ///         - `MIMPI_ERROR_DEADLOCK_DETECTED` if a deadlock has been detected
 ///           and therefore this call would else never return.
 ///
-// MIMPI_Retcode MIMPI_Bcast(
-//     void *data,
-//     int count,
-//     int root
-// );
+MIMPI_Retcode MIMPI_Bcast(
+    void *data,
+    int count,
+    int root
+);
 
 /// @brief Reduces data from all processes to one.
 ///
@@ -167,12 +167,12 @@ MIMPI_Retcode MIMPI_Recv(
 ///         - `MIMPI_ERROR_DEADLOCK_DETECTED` if a deadlock has been detected
 ///           and therefore this call would else never return.
 ///
-// MIMPI_Retcode MIMPI_Reduce(
-//     void const *send_data,
-//     void *recv_data,
-//     int count,
-//     MIMPI_Op op,
-//     int root
-// );
+MIMPI_Retcode MIMPI_Reduce(
+    void const *send_data,
+    void *recv_data,
+    int count,
+    MIMPI_Op op,
+    int root
+);
 
 #endif /* MIMPI_H */
