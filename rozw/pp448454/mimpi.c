@@ -3,23 +3,18 @@
 #include "mimpi.h"
 #include "mimpi_common.h"
 #include "string.h"
+#include <sys/types.h>
+#include <unistd.h>
 //#include "channel.h"
 
 int rank, n_processes;
 int *to_me, *from_me;
 
-void MIMPI_Init(bool enable_deadlock_detection) {
-    //channels_init();
+
+void set_descriptors() {
     char* rank_str = getenv("MIMPI_RANK");
-    rank = atoi(rank_str);
-
-    char* n_str = getenv("MIMPI_N");
-    n_processes = atoi(n_str);
-
-
     to_me = malloc(n_processes * sizeof(int));
     from_me = malloc(n_processes * sizeof(int));
-    
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         char i_str[10];
@@ -29,34 +24,62 @@ void MIMPI_Init(bool enable_deadlock_detection) {
         strcat(name, rank_str);
         strcat(name, "_TO_");
         strcat(name, i_str);
-        char* xd = getenv(name);
-        from_me[i] = atoi(xd);
+        strcat(name, "_WRITE");
+        char* val = getenv(name);
+        from_me[i] = atoi(val);
 
         char name2[100] = "MIMPI_";
         strcat(name2, i_str);
         strcat(name2, "_TO_");
         strcat(name2, rank_str);
-        xd = getenv(name2);
-        to_me[i] = atoi(xd);
+        strcat(name2, "_READ");
+        val = getenv(name2);
+        to_me[i] = atoi(val);
     }
+
+    // Closing not mine descriptors.
+    int how_many = atoi(getenv("MIMPI_DESCRIPTOR_COUNTER"));
+    int mine[how_many];
+    for(int i = 0; i < how_many; i++) 
+        mine[i] = 0;
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
-        printf("%d to %d: %d\n", rank, i, from_me[i]);
-        printf("%d to %d: %d\n", i, rank, to_me[i]);
+        mine[to_me[i]] = 1;
+        mine[from_me[i]] = 1;
     }
-
-
+    for(int i = 21; i < how_many; i++)
+        if(!mine[i]) 
+            close(i);
 }
 
-// void MIMPI_Finalize() {
-//     TODO
+void MIMPI_Init(bool enable_deadlock_detection) {
+    //channels_init();
+    char* rank_str = getenv("MIMPI_RANK");
+    rank = atoi(rank_str);
 
-//     channels_finalize();
-// }
+    char* n_str = getenv("MIMPI_N");
+    n_processes = atoi(n_str);
 
-// int MIMPI_World_size() {
-//     TODO
-// }
+    set_descriptors();
+}
+
+void MIMPI_Finalize() {
+    // Closing mine descriptors.
+    for(int i = 0; i < n_processes; i++) {
+        if(i == rank) continue;
+        close(to_me[i]);
+        close(from_me[i]);
+    }
+
+    free(to_me);
+    free(from_me);
+
+    // channels_finalize();
+}
+
+int MIMPI_World_size() {
+    return n_processes;
+}
 
 int MIMPI_World_rank() {
     return rank;

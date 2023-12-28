@@ -12,8 +12,9 @@ int main(int argc, char **argv) {
     // printf("xd: %s\n", xd);
     //printf("Hello world\n");
     MIMPI_Init(0);
-    printf("rank: %d\n", MIMPI_World_rank());
-
+    // printf("rank: %d\n", MIMPI_World_rank());
+    // printf("size: %d\n", MIMPI_World_size());
+    MIMPI_Finalize();
 
 }
 

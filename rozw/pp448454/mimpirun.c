@@ -7,34 +7,48 @@
 
 #include "mimpi_common.h"
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
-        printf("Wrong number of arguments\n");
-        return 1;
-    }
-    int n = atoi(argv[1]);
-    char* path = argv[2];
-
-    setenv("MIMPI_N", argv[1], 1);
-
+void set_channel_descriptors(int n) {
     int counter = 21; // First descriptor to use.
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             if (i == j) continue;
-            char i_str[10], j_str[10], counter_str[10];
+            char i_str[10], j_str[10], read_str[10], write_str[10];
+            int read = counter++, write = counter++;
+
             sprintf(i_str, "%d", i);
             sprintf(j_str, "%d", j);
-            sprintf(counter_str, "%d", counter++);
+            sprintf(read_str, "%d", read);
+            sprintf(write_str, "%d", write);
 
             char name[100] = "MIMPI_";
             strcat(name, i_str);
             strcat(name, "_TO_");
             strcat(name, j_str);
+            strcat(name, "_READ");
+            setenv(name, read_str, 1);
 
-            setenv(name, counter_str, 1);
+            char name2[100] = "MIMPI_";
+            strcat(name2, i_str);
+            strcat(name2, "_TO_");
+            strcat(name2, j_str);
+            strcat(name2, "_WRITE");
+            setenv(name2, write_str, 1);
+
+            int fd[2];
+            ASSERT_SYS_OK(pipe(fd));
+            dup2(fd[0], read);
+            close(fd[0]);
+            dup2(fd[1], write);
+            close(fd[1]);
         }
     }
+    char counter_str[10];
+    sprintf(counter_str, "%d", counter);
+    setenv("MIMPI_DESCRIPTOR_COUNTER", counter_str, 1);
+}
 
+
+int run_processes(int n, char* path, int argc, char** argv) {
     for (int i = 0; i < n; i++) {
         char rank[10];
         sprintf(rank, "%d", i);
@@ -57,6 +71,25 @@ int main(int argc, char **argv) {
     for (int i = 0; i < n; i++) {
         ASSERT_SYS_OK(wait(NULL));
     }
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        printf("Wrong number of arguments\n");
+        return 1;
+    }
+    int n = atoi(argv[1]);
+    char* path = argv[2];
+
+    setenv("MIMPI_N", argv[1], 1);
+
+    set_channel_descriptors(n);
+
+    if(run_processes(n, path, argc, argv))
+        return 1;
+        
+
 
     return 0;
 }

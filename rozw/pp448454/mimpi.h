@@ -39,17 +39,17 @@ void MIMPI_Init(bool enable_deadlock_detection);
 /// After a process has called this function, all MIMPI interaction with it
 /// (e.g. sending data to it) should return `MIMPI_ERROR_REMOTE_FINISHED`.
 ///
-// void MIMPI_Finalize();
+void MIMPI_Finalize();
 
 /// @brief Returns the number of processes launched by `mimpirun`.
-// int MIMPI_World_size();
+int MIMPI_World_size();
 
 /// @brief Returns the identifier of this process.
 ///
 /// The identifier is unique processes launched by `mimpirun`.
 /// Identifiers should be consecutive natural numbers.
 ///
-// int MIMPI_World_rank();
+int MIMPI_World_rank();
 
 /// @brief Sends data to the specified process.
 ///
