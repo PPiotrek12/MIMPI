@@ -3,6 +3,7 @@
         "types.h": "c",
         "stdlib.h": "c",
         "stdio.h": "c",
-        "mimpi.h": "c"
+        "mimpi.h": "c",
+        "stdnoreturn.h": "c"
     }
 }

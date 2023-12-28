@@ -68,6 +68,12 @@ int run_processes(int n, char* path, int argc, char** argv) {
             return 1;
         }
     }
+
+    for (int i = 21; i < atoi(getenv("MIMPI_DESCRIPTOR_COUNTER")); i++) {
+        ASSERT_SYS_OK(close(i));
+    }    
+
+
     // Wait for all child processes to finish.
     for (int i = 0; i < n; i++)
         ASSERT_SYS_OK(wait(NULL));
@@ -87,6 +93,6 @@ int main(int argc, char **argv) {
 
     if(run_processes(n, path, argc, argv))
         return 1;
-        
+
     return 0;
 }
