@@ -12,12 +12,15 @@ int rank, n_processes;
 int *to_me, *from_me, *to_me_write;
 pthread_mutex_t list_mutex; // Mutex for list.
 pthread_mutex_t waiting_for_message; // Semaphore for waiting for message.
+pthread_cond_t waiting_for_message_cond; // Condition for waiting for message.
 pthread_t *threads;
 int *args;
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
 
+
+// ======================================= LIST OF MESSAGES =======================================
 struct message {
     int tag;
     int count;
@@ -31,9 +34,6 @@ struct list_elem {
     struct list_elem *prev;
 } *head, *tail;
 
-
-
-// ====================================== RECEIVING MESSAGES ======================================
 void add_to_list(char *data, int count, int tag, int source) {
     struct message *msg = (void *) malloc(sizeof(struct message));
     if (msg == NULL)
@@ -56,6 +56,18 @@ void add_to_list(char *data, int count, int tag, int source) {
     ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
 }
 
+void remove_from_list(struct list_elem *elem) {
+    elem->prev->next = elem->next;
+    elem->next->prev = elem->prev;
+    free(elem->msg->data);
+    free(elem->msg);
+    free(elem);
+}
+
+
+
+
+// ====================================== RECEIVING MESSAGES ======================================
 void read_whole_message(int fd, void *data, int count) {
     int read_bytes = 0;
     while(read_bytes < count) {
@@ -74,7 +86,7 @@ void* wait_for_messages(void* arg) {
         if (count == -1) // Interrupting thread.
             return NULL;
 
-        read_whole_message(to_me[i], &tag, 4); // TODO: check if tag is -1.
+        read_whole_message(to_me[i], &tag, 4);
 
         char *data = (void *) malloc(count);
         if (data == NULL)
@@ -83,20 +95,15 @@ void* wait_for_messages(void* arg) {
         read_whole_message(to_me[i], data, count);
         add_to_list(data, count, tag, i);
 
+        ASSERT_SYS_OK(pthread_mutex_lock(&waiting_for_message));
         if(if_waiting_for_message && w_count == count && w_source == i && 
-            (w_tag == tag || w_tag == MIMPI_ANY_TAG))
-            ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
+            (w_tag == tag || w_tag == MIMPI_ANY_TAG)) 
+            ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
+        ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
     }
     return NULL;
 }
 
-void remove_from_list(struct list_elem *elem) {
-    elem->prev->next = elem->next;
-    elem->next->prev = elem->prev;
-    free(elem->msg->data);
-    free(elem->msg);
-    free(elem);
-}
 
 // Returns 1 if found, 0 otherwise.
 int search_for_message(void *data, int count, int source, int tag) {
@@ -116,25 +123,30 @@ int search_for_message(void *data, int count, int source, int tag) {
     return false;
 }
 
+
 MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
-    if (search_for_message(data, count, source, tag)) {
-        return MIMPI_SUCCESS;
-    }
-    else {
+    if (source == rank)
+        return MIMPI_ERROR_ATTEMPTED_SELF_OP;
+    // TODO: obsluga bledu MIMPI_ERROR_NO_SUCH_RANK
+    // TODO: obsluga bledu MIMPI_ERROR_REMOTE_FINISHED
+    if (!search_for_message(data, count, source, tag)) {
         while(1) {
+            ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
             if_waiting_for_message = true;
             w_tag = tag;
             w_count = count;
             w_source = source;
 
-            ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
+            ASSERT_ZERO(pthread_cond_wait(&waiting_for_message_cond, &waiting_for_message));
+            ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
 
             if_waiting_for_message = false;
-            if (search_for_message(data, count, source, tag)) {
+            if (search_for_message(data, count, source, tag))
                 return MIMPI_SUCCESS;
-            }
         }
     }
+    else 
+        return MIMPI_SUCCESS;
 }
 
 
@@ -143,6 +155,10 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
 
 // ======================================= SENDING MESSAGES =======================================
 MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) {
+    if (destination == rank)
+        return MIMPI_ERROR_ATTEMPTED_SELF_OP;
+    // TODO: obsluga bledu MIMPI_ERROR_NO_SUCH_RANK
+    // TODO: obsluga bledu MIMPI_ERROR_REMOTE_FINISHED
     ASSERT_SYS_OK(chsend(from_me[destination], &count, 4));
     ASSERT_SYS_OK(chsend(from_me[destination], &tag, 4));
     ASSERT_SYS_OK(chsend(from_me[destination], data, count));
@@ -216,6 +232,8 @@ void MIMPI_Init(bool enable_deadlock_detection) {
     set_descriptors();
 
     ASSERT_ZERO(pthread_mutex_init(&list_mutex, NULL));
+    ASSERT_ZERO(pthread_mutex_init(&waiting_for_message, NULL));
+    ASSERT_ZERO(pthread_cond_init(&waiting_for_message_cond, NULL));
 
     // Creating list.
     head = (void *) malloc(sizeof(struct list_elem));
@@ -283,10 +301,15 @@ void MIMPI_Finalize() {
 
     ASSERT_ZERO(pthread_mutex_destroy(&list_mutex));
     ASSERT_ZERO(pthread_mutex_destroy(&waiting_for_message));
+    ASSERT_ZERO(pthread_cond_destroy(&waiting_for_message_cond));
 
     channels_finalize();
 }
 
+
+
+
+// ======================================= WORLD FUNCTIONS ========================================
 int MIMPI_World_size() {
     return n_processes;
 }
@@ -324,4 +347,11 @@ int MIMPI_World_rank() {
 
 
 
-// TODO : pododawac asserty_sys_ok
+
+// TODO : dodac obluge MIMPI_Retcode -> wychodzenie gdy sa zle wolania funkcji
+// TODO : dodac funkcje komunikacji grupowej
+// TODO : sprawdzic czy na pewno wszedzie sa asserty
+
+
+
+// TODO : sprawdzic czy na pewno wszedzie sa free

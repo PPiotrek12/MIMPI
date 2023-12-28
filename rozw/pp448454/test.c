@@ -19,13 +19,15 @@ int main(int argc, char **argv) {
         send[i] = 'a';
 
     if(rank == 0) { 
-        MIMPI_Send(send, size, 1, -2);
         sleep(1);
-        MIMPI_Send(send, size, 1, -1);
+        MIMPI_Send(send, size, 1, 2138);
+        sleep(1);
+        MIMPI_Send(send, size, 1, 2137);
+
     }
     else if(rank == 1) {
         char buf[size + 10];
-        MIMPI_Recv(buf, size, 0, 0);
+        MIMPI_Recv(buf, size, 0, 2137);
         int ile = 0;
         for(int i = 0; i < size; i++)
             if(buf[i] == 'a')
