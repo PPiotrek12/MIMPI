@@ -8,8 +8,8 @@ CFLAGS := --std=gnu11 -Wall -DDEBUG -lpthread
 TESTS := $(wildcard tests/*.self)
 
 CHANNEL_SRC := channel.c channel.h
-#MIMPI_COMMON_SRC := $(CHANNEL_SRC) mimpi_common.c mimpi_common.h
-MIMPI_COMMON_SRC := mimpi_common.c mimpi_common.h
+MIMPI_COMMON_SRC := $(CHANNEL_SRC) mimpi_common.c mimpi_common.h
+#MIMPI_COMMON_SRC := mimpi_common.c mimpi_common.h
 
 MIMPIRUN_SRC := $(MIMPI_COMMON_SRC) mimpirun.c
 
@@ -20,7 +20,7 @@ all: mimpirun
 all: test
 
 mimpirun: $(MIMPIRUN_SRC)
-	gcc $(CFLAGS) -o $@ $(filter %.c,$^)
+	gcc $(CFLAGS) -o $@ $(filter %.c,$^) -lpthread
 
 
 test: test.c $(MIMPI_SRC)

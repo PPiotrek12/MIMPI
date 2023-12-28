@@ -6,13 +6,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
-//#include "channel.h"
+#include "channel.h"
 
 int rank, n_processes;
 int *to_me, *from_me, *to_me_write;
-pthread_mutex_t mutex; // Mutex for list.
+pthread_mutex_t list_mutex; // Mutex for list.
 pthread_mutex_t waiting_for_message; // Semaphore for waiting for message.
 pthread_t *threads;
+int *args;
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -42,20 +43,20 @@ void add_to_list(char *data, int count, int tag, int source) {
 
     struct list_elem *elem = malloc(sizeof(struct list_elem));
 
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&list_mutex);
     elem->msg = msg;
     elem->next = tail;
     elem->prev = tail->prev;
     tail->prev->next = elem;
     tail->prev = elem;
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&list_mutex);
 }
 
 void read_whole_message(int fd, void *data, int count) {
     int read_bytes = 0;
     while(read_bytes < count) {
         int to_read = count - read_bytes;
-        int read_now = read(fd, data + read_bytes, to_read);
+        int read_now = chrecv(fd, data + read_bytes, to_read);
         read_bytes += read_now;
     }
 }
@@ -74,7 +75,8 @@ void* wait_for_messages(void* arg) {
         read_whole_message(to_me[i], data, count);
         add_to_list(data, count, tag, i);
 
-        if(if_waiting_for_message && w_tag == tag && w_count == count && w_source == i)
+        if(if_waiting_for_message && w_count == count && w_source == i && 
+            (w_tag == tag || w_tag == MIMPI_ANY_TAG))
             pthread_mutex_unlock(&waiting_for_message);
     }
     return NULL;
@@ -90,18 +92,19 @@ void remove_from_list(struct list_elem *elem) {
 
 // Returns 1 if found, 0 otherwise.
 int search_for_message(void *data, int count, int source, int tag) {
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&list_mutex);
     struct list_elem *elem = head->next;
     while(elem != tail) {
-        if(elem->msg->count == count && elem->msg->tag == tag && elem->msg->source == source) {
+        if(elem->msg->count == count && elem->msg->source == source && 
+            (elem->msg->tag == tag || tag == MIMPI_ANY_TAG)) {
             memcpy(data, elem->msg->data, count);
             remove_from_list(elem);
-            pthread_mutex_unlock(&mutex);
+            pthread_mutex_unlock(&list_mutex);
             return true;
         }
         elem = elem->next;
     }
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&list_mutex);
     return false;
 }
 
@@ -132,9 +135,9 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
 
 // ======================================= SENDING MESSAGES =======================================
 MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) {
-    write(from_me[destination], &count, 4);
-    write(from_me[destination], &tag, 4);
-    write(from_me[destination], data, count);
+    chsend(from_me[destination], &count, 4);
+    chsend(from_me[destination], &tag, 4);
+    chsend(from_me[destination], data, count);
     return MIMPI_SUCCESS;
 }
 
@@ -195,12 +198,12 @@ void set_descriptors() {
 }
 
 void MIMPI_Init(bool enable_deadlock_detection) {
-    //channels_init();
+    channels_init();
     rank = atoi(getenv("MIMPI_RANK"));
     n_processes = atoi(getenv("MIMPI_N"));  
     set_descriptors();
 
-    pthread_mutex_init(&mutex, NULL);
+    pthread_mutex_init(&list_mutex, NULL);
 
     // Creating list.
     head = malloc(sizeof(struct list_elem));
@@ -212,7 +215,7 @@ void MIMPI_Init(bool enable_deadlock_detection) {
 
     // Creating threads.
     threads = malloc(n_processes * sizeof(pthread_t));
-    int args[n_processes]; // TODO: git?
+    args = malloc(n_processes * sizeof(int));
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         args[i] = i;
@@ -229,7 +232,7 @@ void MIMPI_Finalize() {
     for (int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         int msg = -1;
-        write(to_me_write[i], &msg, 4);
+        chsend(to_me_write[i], &msg, 4);
     }
 
     // Waiting for threads to finish.
@@ -238,6 +241,7 @@ void MIMPI_Finalize() {
         pthread_join(threads[i], NULL);
     }
     free(threads);
+    free(args);
 
     // Closing mine descriptors.
     for(int i = 0; i < n_processes; i++) {
@@ -250,7 +254,7 @@ void MIMPI_Finalize() {
     free(from_me);
 
     // Closing list.
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&list_mutex);
     struct list_elem *elem = head->next;
     while(elem != tail) {
         remove_from_list(elem);
@@ -258,12 +262,11 @@ void MIMPI_Finalize() {
     }
     free(head);
     free(tail);
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&list_mutex);
 
-    pthread_mutex_destroy(&mutex);
+    pthread_mutex_destroy(&list_mutex);
 
-    // channels_finalize();
-
+    channels_finalize();
 }
 
 int MIMPI_World_size() {

@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <string.h>
+#include "channel.h"
 
 #include "mimpi_common.h"
 
@@ -35,7 +36,7 @@ void set_channel_descriptors(int n) {
             setenv(name2, write_str, 1);
 
             int fd[2];
-            ASSERT_SYS_OK(pipe(fd));
+            ASSERT_SYS_OK(channel(fd));
             dup2(fd[0], read);
             close(fd[0]);
             dup2(fd[1], write);
