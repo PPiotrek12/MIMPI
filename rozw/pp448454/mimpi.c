@@ -16,6 +16,7 @@ pthread_mutex_t waiting_for_message; // Semaphore for waiting for message.
 pthread_cond_t waiting_for_message_cond; // Condition for waiting for message.
 pthread_t *threads;
 int *args;
+bool *finished;
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -48,13 +49,11 @@ void add_to_list(char *data, int count, int tag, int source) {
     if (elem == NULL)
         ASSERT_SYS_OK(-1);
 
-    ASSERT_ZERO(pthread_mutex_lock(&list_mutex));
     elem->msg = msg;
     elem->next = tail;
     elem->prev = tail->prev;
     tail->prev->next = elem;
     tail->prev = elem;
-    ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
 }
 
 void remove_from_list(struct list_elem *elem) {
@@ -75,13 +74,13 @@ int read_whole_message(int fd, void *data, int count) {
         int to_read = count - read_bytes;
         int read_now;
         int res = read_now = chrecv(fd, data + read_bytes, to_read);
-        if(res == -1 && errno == EBADF) { // Thread interrupted.
+        if(res == -1 && errno == EBADF) // Thread interrupted.
             return -1;
-        }
         else if (res == -1)
             ASSERT_SYS_OK(-1);
-        // else if (res == 0)
-        //     ASSERT_SYS_OK(-1);
+        if (res == 0) // Process finished.
+            return -2;
+
         read_bytes += read_now;
     }
     return 0;
@@ -91,25 +90,35 @@ void* wait_for_messages(void* arg) {
     int i = *(int*)arg;
     while(1) {
         int count, tag;
-        if (read_whole_message(to_me[i], &count, 4) == -1)
-            break;
+        int ret = read_whole_message(to_me[i], &count, 4);
+        if (ret == -1) break;
 
-        if (read_whole_message(to_me[i], &tag, 4) == -1)
-            break;
+        char *data = NULL;
+        if (ret != -2) { // If there is any data to read.
+            if (read_whole_message(to_me[i], &tag, 4) == -1) break;
 
-        char *data = (void *) malloc(count);
-        if (data == NULL)
-            ASSERT_SYS_OK(-1);
-            
-        if (read_whole_message(to_me[i], data, count) == -1)
-            break;
-
-        add_to_list(data, count, tag, i);
+            char *data = (void *) malloc(count);
+            if (data == NULL)
+                ASSERT_SYS_OK(-1);
+                
+            if (read_whole_message(to_me[i], data, count) == -1) break;
+        }
 
         ASSERT_SYS_OK(pthread_mutex_lock(&waiting_for_message));
+
+        if (ret == -2) { // Process from which we want to read finished.
+            finished[i] = true;
+            if (if_waiting_for_message && w_source == i) 
+                ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
+            ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
+            break;
+        }
+
+        add_to_list(data, count, tag, i);
         if(if_waiting_for_message && w_count == count && w_source == i && 
             (w_tag == tag || w_tag == MIMPI_ANY_TAG)) 
             ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
+
         ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
     }
     return NULL;
@@ -138,8 +147,13 @@ int search_for_message(void *data, int count, int source, int tag) {
 MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
     if (source == rank)
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
-    // TODO: obsluga bledu MIMPI_ERROR_NO_SUCH_RANK
-    // TODO: obsluga bledu MIMPI_ERROR_REMOTE_FINISHED
+    if (source >= n_processes || source < 0) // TODO: czy to jest ok?
+        return MIMPI_ERROR_NO_SUCH_RANK;
+    if (finished[source]) {
+        printf("wyszedl wczesniej\n");
+        return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+        
     if (!search_for_message(data, count, source, tag)) {
         while(1) {
             ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
@@ -149,9 +163,15 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
             w_source = source;
 
             ASSERT_ZERO(pthread_cond_wait(&waiting_for_message_cond, &waiting_for_message));
+            if (finished[source]) {
+                printf("wyszedl gdy czekalem\n");
+                if_waiting_for_message = false;
+                ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
+                return MIMPI_ERROR_REMOTE_FINISHED;
+            }
+            if_waiting_for_message = false;
             ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
 
-            if_waiting_for_message = false;
             if (search_for_message(data, count, source, tag))
                 return MIMPI_SUCCESS;
         }
@@ -253,6 +273,12 @@ void MIMPI_Init(bool enable_deadlock_detection) {
     tail->next = NULL;
     tail->prev = head;
 
+    finished = (void *) malloc(n_processes * sizeof(bool));
+    if (finished == NULL)
+        ASSERT_SYS_OK(-1);
+    for(int i = 0; i < n_processes; i++)
+        finished[i] = false;
+
     // Creating threads.
     threads = (void *) malloc(n_processes * sizeof(pthread_t));
     args = (void *) malloc(n_processes * sizeof(int));
@@ -274,7 +300,7 @@ void MIMPI_Finalize() {
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         ASSERT_SYS_OK(close(to_me[i]));
-        ASSERT_SYS_OK(close(from_me[i])); //TODO co jak czekam juz , czy nie zwroci -1
+        ASSERT_SYS_OK(close(from_me[i]));
     }
 
     // Waiting for threads to finish.

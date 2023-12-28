@@ -19,14 +19,14 @@ int main(int argc, char **argv) {
         send[i] = 'a';
 
     if(rank == 0) { 
-        sleep(1);
-        MIMPI_Send(send, size, 1, 2137);
+        //sleep(1);
+        //MIMPI_Send(send, size, 1, 2137);
 
     }
     else if(rank == 1) {
         //sleep(3);
         char buf[size + 10];
-        sleep(1);
+    //    sleep(1);
         MIMPI_Recv(buf, size, 0, 2137);
         int ile = 0;
         for(int i = 0; i < size; i++)
@@ -37,7 +37,7 @@ int main(int argc, char **argv) {
         printf("buf: %s\n", buf);
     }
 
-    //sleep(2);
+    sleep(2);
     MIMPI_Finalize();
 }
 
