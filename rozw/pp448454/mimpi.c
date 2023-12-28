@@ -33,30 +33,35 @@ struct list_elem {
 
 
 
-// ====================================== RECEIVIND MESSAGES ======================================
+// ====================================== RECEIVING MESSAGES ======================================
 void add_to_list(char *data, int count, int tag, int source) {
-    struct message *msg = malloc(sizeof(struct message));
+    struct message *msg = (void *) malloc(sizeof(struct message));
+    if (msg == NULL)
+        ASSERT_SYS_OK(-1);
     msg->tag = tag;
     msg->count = count;
     msg->data = data;
     msg->source = source;
 
-    struct list_elem *elem = malloc(sizeof(struct list_elem));
+    struct list_elem *elem = (void *)malloc(sizeof(struct list_elem));
+    if (elem == NULL)
+        ASSERT_SYS_OK(-1);
 
-    pthread_mutex_lock(&list_mutex);
+    ASSERT_ZERO(pthread_mutex_lock(&list_mutex));
     elem->msg = msg;
     elem->next = tail;
     elem->prev = tail->prev;
     tail->prev->next = elem;
     tail->prev = elem;
-    pthread_mutex_unlock(&list_mutex);
+    ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
 }
 
 void read_whole_message(int fd, void *data, int count) {
     int read_bytes = 0;
     while(read_bytes < count) {
         int to_read = count - read_bytes;
-        int read_now = chrecv(fd, data + read_bytes, to_read);
+        int read_now;
+        ASSERT_SYS_OK(read_now = chrecv(fd, data + read_bytes, to_read));
         read_bytes += read_now;
     }
 }
@@ -68,16 +73,19 @@ void* wait_for_messages(void* arg) {
         read_whole_message(to_me[i], &count, 4);
         if (count == -1) // Interrupting thread.
             return NULL;
-            
+
         read_whole_message(to_me[i], &tag, 4); // TODO: check if tag is -1.
 
-        char *data = malloc(count);
+        char *data = (void *) malloc(count);
+        if (data == NULL)
+            ASSERT_SYS_OK(-1);
+            
         read_whole_message(to_me[i], data, count);
         add_to_list(data, count, tag, i);
 
         if(if_waiting_for_message && w_count == count && w_source == i && 
             (w_tag == tag || w_tag == MIMPI_ANY_TAG))
-            pthread_mutex_unlock(&waiting_for_message);
+            ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
     }
     return NULL;
 }
@@ -92,19 +100,19 @@ void remove_from_list(struct list_elem *elem) {
 
 // Returns 1 if found, 0 otherwise.
 int search_for_message(void *data, int count, int source, int tag) {
-    pthread_mutex_lock(&list_mutex);
+    ASSERT_ZERO(pthread_mutex_lock(&list_mutex));
     struct list_elem *elem = head->next;
     while(elem != tail) {
         if(elem->msg->count == count && elem->msg->source == source && 
             (elem->msg->tag == tag || tag == MIMPI_ANY_TAG)) {
             memcpy(data, elem->msg->data, count);
             remove_from_list(elem);
-            pthread_mutex_unlock(&list_mutex);
+            ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
             return true;
         }
         elem = elem->next;
     }
-    pthread_mutex_unlock(&list_mutex);
+    ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
     return false;
 }
 
@@ -119,7 +127,7 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
             w_count = count;
             w_source = source;
 
-            pthread_mutex_lock(&waiting_for_message);
+            ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
 
             if_waiting_for_message = false;
             if (search_for_message(data, count, source, tag)) {
@@ -135,9 +143,9 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
 
 // ======================================= SENDING MESSAGES =======================================
 MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) {
-    chsend(from_me[destination], &count, 4);
-    chsend(from_me[destination], &tag, 4);
-    chsend(from_me[destination], data, count);
+    ASSERT_SYS_OK(chsend(from_me[destination], &count, 4));
+    ASSERT_SYS_OK(chsend(from_me[destination], &tag, 4));
+    ASSERT_SYS_OK(chsend(from_me[destination], data, count));
     return MIMPI_SUCCESS;
 }
 
@@ -148,9 +156,12 @@ MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) 
 // ======================================== INITIALIZATION ========================================
 void set_descriptors() {
     char* rank_str = getenv("MIMPI_RANK");
-    to_me = malloc(n_processes * sizeof(int));
-    from_me = malloc(n_processes * sizeof(int));
-    to_me_write = malloc(n_processes * sizeof(int));
+    to_me = (void *) malloc(n_processes * sizeof(int));
+    from_me = (void *) malloc(n_processes * sizeof(int));
+    to_me_write = (void *) malloc(n_processes * sizeof(int));
+    if (to_me == NULL || from_me == NULL || to_me_write == NULL)
+        ASSERT_SYS_OK(-1);
+
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         char i_str[10];
@@ -180,6 +191,7 @@ void set_descriptors() {
         val = getenv(name3);
         to_me_write[i] = atoi(val);
     }
+
     // Closing not mine descriptors.
     int how_many = atoi(getenv("MIMPI_DESCRIPTOR_COUNTER"));
     int mine[how_many];
@@ -193,7 +205,7 @@ void set_descriptors() {
     }
     for(int i = 21; i < how_many; i++)
         if(!mine[i]) 
-            close(i);
+            ASSERT_SYS_OK(close(i));
     
 }
 
@@ -203,24 +215,28 @@ void MIMPI_Init(bool enable_deadlock_detection) {
     n_processes = atoi(getenv("MIMPI_N"));  
     set_descriptors();
 
-    pthread_mutex_init(&list_mutex, NULL);
+    ASSERT_ZERO(pthread_mutex_init(&list_mutex, NULL));
 
     // Creating list.
-    head = malloc(sizeof(struct list_elem));
-    tail = malloc(sizeof(struct list_elem));
+    head = (void *) malloc(sizeof(struct list_elem));
+    tail = (void *) malloc(sizeof(struct list_elem));
+    if (head == NULL || tail == NULL)
+        ASSERT_SYS_OK(-1);
     head->next = tail;
     head->prev = NULL;
     tail->next = NULL;
     tail->prev = head;
 
     // Creating threads.
-    threads = malloc(n_processes * sizeof(pthread_t));
-    args = malloc(n_processes * sizeof(int));
+    threads = (void *) malloc(n_processes * sizeof(pthread_t));
+    args = (void *) malloc(n_processes * sizeof(int));
+    if (threads == NULL || args == NULL)
+        ASSERT_SYS_OK(-1);
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         args[i] = i;
-        pthread_create(&threads[i], NULL, wait_for_messages, &args[i]);
-    }    
+        ASSERT_SYS_OK(pthread_create(&threads[i], NULL, wait_for_messages, &args[i]));
+    }
 }
 
 
@@ -232,13 +248,13 @@ void MIMPI_Finalize() {
     for (int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         int msg = -1;
-        chsend(to_me_write[i], &msg, 4);
+        ASSERT_SYS_OK(chsend(to_me_write[i], &msg, 4));
     }
 
     // Waiting for threads to finish.
     for(int i = 0; i < n_processes; i++) { 
         if(i == rank) continue;
-        pthread_join(threads[i], NULL);
+        ASSERT_SYS_OK(pthread_join(threads[i], NULL));
     }
     free(threads);
     free(args);
@@ -246,15 +262,16 @@ void MIMPI_Finalize() {
     // Closing mine descriptors.
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
-        close(to_me[i]);
-        close(from_me[i]);
-        close(to_me_write[i]);
+        ASSERT_SYS_OK(close(to_me[i]));
+        ASSERT_SYS_OK(close(from_me[i]));
+        ASSERT_SYS_OK(close(to_me_write[i]));
     }
     free(to_me);
     free(from_me);
+    free(to_me_write);
 
     // Closing list.
-    pthread_mutex_lock(&list_mutex);
+    ASSERT_ZERO(pthread_mutex_lock(&list_mutex));
     struct list_elem *elem = head->next;
     while(elem != tail) {
         remove_from_list(elem);
@@ -262,9 +279,10 @@ void MIMPI_Finalize() {
     }
     free(head);
     free(tail);
-    pthread_mutex_unlock(&list_mutex);
+    ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
 
-    pthread_mutex_destroy(&list_mutex);
+    ASSERT_ZERO(pthread_mutex_destroy(&list_mutex));
+    ASSERT_ZERO(pthread_mutex_destroy(&waiting_for_message));
 
     channels_finalize();
 }
@@ -303,3 +321,7 @@ int MIMPI_World_rank() {
 // ) {
 //     TODO
 // }
+
+
+
+// TODO : pododawac asserty_sys_ok

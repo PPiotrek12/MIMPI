@@ -37,10 +37,10 @@ void set_channel_descriptors(int n) {
 
             int fd[2];
             ASSERT_SYS_OK(channel(fd));
-            dup2(fd[0], read);
-            close(fd[0]);
-            dup2(fd[1], write);
-            close(fd[1]);
+            ASSERT_SYS_OK(dup2(fd[0], read));
+            ASSERT_SYS_OK(close(fd[0]));
+            ASSERT_SYS_OK(dup2(fd[1], write));
+            ASSERT_SYS_OK(close(fd[1]));
         }
     }
     char counter_str[10];
@@ -55,7 +55,8 @@ int run_processes(int n, char* path, int argc, char** argv) {
         sprintf(rank, "%d", i);
         setenv("MIMPI_RANK", rank, 1);
 
-        pid_t pid = fork();
+        pid_t pid;
+        ASSERT_SYS_OK(pid = fork());
         if (pid == 0) {
             char* args[argc - 1];
             args[0] = path;
@@ -63,23 +64,19 @@ int run_processes(int n, char* path, int argc, char** argv) {
                 args[j - 2] = argv[j];
             }
             args[argc - 2] = NULL;
-            execv(path, args);  // TODO : czy to jest ok - cos mialo sie znajdowac w PATH?
-            printf("Failed to execute program\n");
+            ASSERT_SYS_OK(execv(path, args));  // TODO : czy to jest ok - cos mialo sie znajdowac w PATH?
             return 1;
         }
     }
     // Wait for all child processes to finish.
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
         ASSERT_SYS_OK(wait(NULL));
-    }
     return 0;
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        printf("Wrong number of arguments\n");
+    if (argc < 2) 
         return 1;
-    }
     
     int n = atoi(argv[1]);
     char* path = argv[2];
@@ -91,7 +88,5 @@ int main(int argc, char **argv) {
     if(run_processes(n, path, argc, argv))
         return 1;
         
-
-
     return 0;
 }
