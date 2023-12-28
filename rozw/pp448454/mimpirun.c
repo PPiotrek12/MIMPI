@@ -79,6 +79,7 @@ int main(int argc, char **argv) {
         printf("Wrong number of arguments\n");
         return 1;
     }
+    
     int n = atoi(argv[1]);
     char* path = argv[2];
 

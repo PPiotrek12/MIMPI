@@ -18,9 +18,9 @@ int main(int argc, char **argv) {
     for(int i = 0; i < size; i++)
         send[i] = 'a';
 
-
     if(rank == 0) { 
-        sleep(2);
+        MIMPI_Send(send, size, 1, -1);
+        sleep(1);
         MIMPI_Send(send, size, 1, -1);
     }
     else if(rank == 1) {
@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
         //printf("buf: %s\n", buf);
     }
 
-
+    sleep(2);
     MIMPI_Finalize();
 }
 

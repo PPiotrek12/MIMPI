@@ -9,9 +9,10 @@
 //#include "channel.h"
 
 int rank, n_processes;
-int *to_me, *from_me;
+int *to_me, *from_me, *to_me_write;
 pthread_mutex_t mutex; // Mutex for list.
-pthread_mutex_t waiting_for_message; // Mutex for waiting for message.
+pthread_mutex_t waiting_for_message; // Semaphore for waiting for message.
+pthread_t *threads;
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -64,6 +65,9 @@ void* wait_for_messages(void* arg) {
     while(1) {
         int count, tag;
         read_whole_message(to_me[i], &count, 4);
+        if (count == -1) // Interrupting thread.
+            return NULL;
+            
         read_whole_message(to_me[i], &tag, 4); // TODO: check if tag is -1.
 
         char *data = malloc(count);
@@ -120,7 +124,6 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
             }
         }
     }
-    
 }
 
 
@@ -138,10 +141,13 @@ MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) 
 
 
 
+
+// ======================================== INITIALIZATION ========================================
 void set_descriptors() {
     char* rank_str = getenv("MIMPI_RANK");
     to_me = malloc(n_processes * sizeof(int));
     from_me = malloc(n_processes * sizeof(int));
+    to_me_write = malloc(n_processes * sizeof(int));
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         char i_str[10];
@@ -162,8 +168,15 @@ void set_descriptors() {
         strcat(name2, "_READ");
         val = getenv(name2);
         to_me[i] = atoi(val);
+    
+        char name3[100] = "MIMPI_";
+        strcat(name3, i_str);
+        strcat(name3, "_TO_");
+        strcat(name3, rank_str);
+        strcat(name3, "_WRITE");
+        val = getenv(name3);
+        to_me_write[i] = atoi(val);
     }
-
     // Closing not mine descriptors.
     int how_many = atoi(getenv("MIMPI_DESCRIPTOR_COUNTER"));
     int mine[how_many];
@@ -173,16 +186,18 @@ void set_descriptors() {
         if(i == rank) continue;
         mine[to_me[i]] = 1;
         mine[from_me[i]] = 1;
+        mine[to_me_write[i]] = 1;
     }
     for(int i = 21; i < how_many; i++)
         if(!mine[i]) 
             close(i);
+    
 }
 
 void MIMPI_Init(bool enable_deadlock_detection) {
     //channels_init();
     rank = atoi(getenv("MIMPI_RANK"));
-    n_processes = atoi(getenv("MIMPI_N"));
+    n_processes = atoi(getenv("MIMPI_N"));  
     set_descriptors();
 
     pthread_mutex_init(&mutex, NULL);
@@ -196,24 +211,40 @@ void MIMPI_Init(bool enable_deadlock_detection) {
     tail->prev = head;
 
     // Creating threads.
-    pthread_t threads[n_processes];
-    int args[n_processes];
+    threads = malloc(n_processes * sizeof(pthread_t));
+    int args[n_processes]; // TODO: git?
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         args[i] = i;
         pthread_create(&threads[i], NULL, wait_for_messages, &args[i]);
-    }
-
-    
+    }    
 }
 
 
+
+
+// ========================================= FINALIZATION =========================================
 void MIMPI_Finalize() {
+    // Interrupting threads.
+    for (int i = 0; i < n_processes; i++) {
+        if(i == rank) continue;
+        int msg = -1;
+        write(to_me_write[i], &msg, 4);
+    }
+
+    // Waiting for threads to finish.
+    for(int i = 0; i < n_processes; i++) { 
+        if(i == rank) continue;
+        pthread_join(threads[i], NULL);
+    }
+    free(threads);
+
     // Closing mine descriptors.
     for(int i = 0; i < n_processes; i++) {
         if(i == rank) continue;
         close(to_me[i]);
         close(from_me[i]);
+        close(to_me_write[i]);
     }
     free(to_me);
     free(from_me);
@@ -233,8 +264,6 @@ void MIMPI_Finalize() {
 
     // channels_finalize();
 
-
-    // TODO: ubic workerow
 }
 
 int MIMPI_World_size() {
