@@ -24,7 +24,7 @@ mimpirun: $(MIMPIRUN_SRC)
 
 
 test: test.c $(MIMPI_SRC)
-	gcc $(CFLAGS) -o $@ $(filter %.c,$^)
+	gcc $(CFLAGS) -o $@ $(filter %.c,$^) -lpthread
 
 
 # examples_build/%: examples/%.c $(MIMPI_SRC)

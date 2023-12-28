@@ -1,23 +1,42 @@
 #include <stdlib.h>
 #include "stdio.h"
 #include "mimpi.h"
+#include "mimpi_common.h"
+#include "string.h"
+#include <sys/types.h>
+#include <unistd.h>
+#include <pthread.h>
+//#include "channel.h"
+
 
 int main(int argc, char **argv) {
     MIMPI_Init(0);
-
     int rank = MIMPI_World_rank();
-    if(rank == 0) {
-        MIMPI_Send("xd", 2, 1, 0);
+
+    int size = 1000*100;
+    char send[size];
+    for(int i = 0; i < size; i++)
+        send[i] = 'a';
+
+
+    if(rank == 0) { 
+        sleep(2);
+        MIMPI_Send(send, size, 1, -1);
     }
     else if(rank == 1) {
-        char buf[100];
-        MIMPI_Recv(buf, 100, 0, 0);
-        printf("buf: %s\n", buf);
+        char buf[size + 10];
+        MIMPI_Recv(buf, size, 0, -1);
+        int ile = 0;
+        for(int i = 0; i < size; i++)
+            if(buf[i] == 'a')
+                ile++;
+        printf("ile: %d\n", ile);
+        
+        //printf("buf: %s\n", buf);
     }
 
 
     MIMPI_Finalize();
-
 }
 
 
