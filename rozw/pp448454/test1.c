@@ -1,37 +1,91 @@
+// #include <stdbool.h>
+// #include <stdio.h>
+// #include "mimpi.h"
+// #include <unistd.h>
+// #include <stdlib.h>
+// #include <string.h>
+// #include <sys/types.h>
+// #include <sys/wait.h>
+// #include <errno.h>
+
+
+// int main(int argc, char **argv)
+// { 
+//     MIMPI_Init(false);
+
+//     int const world_rank = MIMPI_World_rank();
+//     int size = MIMPI_World_size();
+//     int const tag = 17;
+
+//     char number;
+
+//     char *a = (void *) malloc(1);
+//     *a = 'a';
+
+//     a = (void *) malloc(1);
+//     *a = 'a';
+//     // printf("XD\n");
+    
+//     for(int i = 0; i < 2; i++) {
+//         // MIMPI_Barrier();;
+//         for (int i = 0; i < size; i++) {
+//             if (i == world_rank) continue;    
+//             printf ("send: %d\n", MIMPI_Send(a, 1, i, -1));
+//         }
+//         //sleep(1);
+//         char b;
+//         for (int i = 0; i < size; i++) {
+//             if (i == world_rank) continue;
+//             printf("receive: %d\n", MIMPI_Recv(&b, 1, i, -1));
+            
+//         }
+        
+//     }
+
+    
+//     //printf("koniec\n");
+
+
+//     // int b = MIMPI_Barrier();
+//     // printf("%d\n", b);
+    
+//     MIMPI_Finalize();
+
+//     return 0;
+// }
+
+
+
+
+
+
 #include <stdbool.h>
 #include <stdio.h>
 #include "mimpi.h"
-
+//#include "mimpi_err.h"
 
 int main(int argc, char **argv)
-{ 
+{
     MIMPI_Init(false);
+    int const process_rank = MIMPI_World_rank();
+    int const size_of_cluster = MIMPI_World_size();
 
-    int const world_rank = MIMPI_World_rank();
-
-    int const tag = 17;
-
-    char number;
-    if (world_rank == 0)
+    for (int i = 0; i < 2; i++)
     {
-        number = 42;
-        MIMPI_Send(&number, 1, 1, tag);
+        if (i == process_rank)
+        {
+            printf("Hello World from process %d of %d\n", process_rank, size_of_cluster);
+            fflush(stdout);
+        }
+        int a = MIMPI_Barrier();
+        printf("%d\n", a);
+        fflush(stdout);
+        
     }
-    else if (world_rank == 1)
-    {
-        MIMPI_Recv(&number, 1, 0, tag);
-        printf("Process 1 received number %d from process 0\n", number);
-    }
-
+    //sleep(1);
     MIMPI_Finalize();
     return 0;
 }
-
-
-
-
-
-
 
 
 

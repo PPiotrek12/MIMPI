@@ -42,7 +42,10 @@ void add_to_list(char *data, int count, int tag, int source) {
         ASSERT_SYS_OK(-1);
     msg->tag = tag;
     msg->count = count;
-    msg->data = data;
+    msg->data = (void *) malloc(count);
+    if (msg->data == NULL)
+        ASSERT_SYS_OK(-1);
+    memcpy(msg->data, data, count);
     msg->source = source;
 
     struct list_elem *elem = (void *)malloc(sizeof(struct list_elem));
@@ -65,21 +68,23 @@ void remove_from_list(struct list_elem *elem) {
 }
 
 
-
-
 // ====================================== RECEIVING MESSAGES ======================================
 int read_whole_message(int fd, void *data, int count) {
     int read_bytes = 0;
     while(read_bytes < count) {
         int to_read = count - read_bytes;
         int read_now;
+        //printf("chce czytac %d\n", rank);
         int res = read_now = chrecv(fd, data + read_bytes, to_read);
+        //printf("%d data: %s, %d\n", rank, data, res);
         if(res == -1 && errno == EBADF) // Thread interrupted.
             return -1;
         else if (res == -1)
             ASSERT_SYS_OK(-1);
-        if (res == 0) // Process finished.
+        if (res == 0) {
             return -2;
+        } // Process finished.
+        //printf("count: %d\n", count);
 
         read_bytes += read_now;
     }
@@ -91,6 +96,7 @@ void* wait_for_messages(void* arg) {
     while(1) {
         int count, tag;
         int ret = read_whole_message(to_me[i], &count, 4);
+
         if (ret == -1) break;
 
         void *data = NULL;
@@ -100,25 +106,30 @@ void* wait_for_messages(void* arg) {
             data = (void *) malloc(count);
             if (data == NULL)
                 ASSERT_SYS_OK(-1);
-            
-            if (read_whole_message(to_me[i], data, count) == -1) break;
+            if (count != 0)
+                if (read_whole_message(to_me[i], data, count) == -1) 
+                    break;
         }
 
         ASSERT_SYS_OK(pthread_mutex_lock(&waiting_for_message));
-
         if (ret == -2) { // Process from which we want to read finished.
+            //printf("ZLE\n");
             finished[i] = true;
             if (if_waiting_for_message && w_source == i) 
                 ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
             ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
             break;
         }
+        ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
 
+        ASSERT_SYS_OK(pthread_mutex_lock(&list_mutex));
         add_to_list(data, count, tag, i);
+        ASSERT_SYS_OK(pthread_mutex_unlock(&list_mutex));
+
+        ASSERT_SYS_OK(pthread_mutex_lock(&waiting_for_message));
         if(if_waiting_for_message && w_count == count && w_source == i && 
             (w_tag == tag || w_tag == MIMPI_ANY_TAG)) 
             ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
-
         ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
     }
     return NULL;
@@ -135,10 +146,12 @@ int search_for_message(void *data, int count, int source, int tag) {
             memcpy(data, elem->msg->data, count);
             remove_from_list(elem);
             ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
+            
             return true;
         }
         elem = elem->next;
     }
+    
     ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
     return false;
 }
@@ -149,26 +162,31 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
     if (source >= n_processes || source < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    if (finished[source])
-        return MIMPI_ERROR_REMOTE_FINISHED;
-        
     if (!search_for_message(data, count, source, tag)) {
         while(1) {
             ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
+            if (finished[source]) {
+                ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
+                return MIMPI_ERROR_REMOTE_FINISHED;
+            }
+
             if_waiting_for_message = true;
             w_tag = tag;
             w_count = count;
             w_source = source;
-
+            //printf("%d: czekam na %d     %d\n", rank, source, list_size());
+            fflush(stdout);
             ASSERT_ZERO(pthread_cond_wait(&waiting_for_message_cond, &waiting_for_message));
+            //printf("%d: skonczylem czekac na %d   %d\n", rank, source, list_size());
+            fflush(stdout);
             if_waiting_for_message = false;
             ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
 
-            if (search_for_message(data, count, source, tag)) 
+            if (search_for_message(data, count, source, tag))
                 return MIMPI_SUCCESS;
-
             ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
             if (finished[source]) {
+                
                 if_waiting_for_message = false;
                 ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
                 return MIMPI_ERROR_REMOTE_FINISHED;
@@ -190,9 +208,11 @@ MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) 
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
     if (destination >= n_processes || destination < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    
+    //printf("%d: wysylam do %d     %d\n", rank, destination, list_size());
+    fflush(stdout);
     chsend(from_me[destination], &count, 4);
     chsend(from_me[destination], &tag, 4);
+    //printf("wysylam: %d\n", count );
     int res = chsend(from_me[destination], data, count);
 
     if (res == - 1 && errno == EPIPE)
@@ -348,35 +368,91 @@ int MIMPI_World_rank() {
 
 
 
+int counter = 0;
 MIMPI_Retcode MIMPI_Barrier() {
-//    TODO
+    char *a;
+    a = (void *) malloc(1);
+    if (a == NULL)
+        ASSERT_SYS_OK(-1);
+    *a = 'a';
+    counter++;
+    for (int i = 0; i < n_processes; i++) {
+        if (i == rank) continue;
+        
+        if (MIMPI_Send(a, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+
+    char b;
+    for (int i = 0; i < n_processes; i++) {
+        if (i == rank) continue;
+        char a;
+        if (MIMPI_Recv(&b, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    
+    return MIMPI_SUCCESS;
 }
 
-MIMPI_Retcode MIMPI_Bcast(
-    void *data,
-    int count,
-    int root
-) {
-  //  TODO
+MIMPI_Retcode MIMPI_Bcast(void *data, int count, int root) {
+    if (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED)
+        return MIMPI_ERROR_REMOTE_FINISHED;
+    
+    if (root >= n_processes || root < 0) // TODO: czy to jest ok?
+        return MIMPI_ERROR_NO_SUCH_RANK;
+    if (root == rank) {
+        for (int i = 0; i < n_processes; i++) {
+            if (i == rank) continue;
+            if (MIMPI_Send(data, count, i, -1) == MIMPI_ERROR_REMOTE_FINISHED)
+                return MIMPI_ERROR_REMOTE_FINISHED;
+        }
+    }
+    else {
+        if (MIMPI_Recv(data, count, root, -1) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    return MIMPI_SUCCESS;
 }
 
-MIMPI_Retcode MIMPI_Reduce(
-    void const *send_data,
-    void *recv_data,
-    int count,
-    MIMPI_Op op,
-    int root
-) {
-    //TODO
+MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MIMPI_Op op, int root ) {
+    // if (root >= n_processes || root < 0) // TODO: czy to jest ok?
+    //     return MIMPI_ERROR_NO_SUCH_RANK;
+    // if (root == rank) {
+    //     for (int i = 0; i < n_processes; i++) {
+    //         if (i == rank) continue;
+    //         if (MIMPI_Send(send_data, count, i, -1) == MIMPI_ERROR_REMOTE_FINISHED)
+    //             return MIMPI_ERROR_REMOTE_FINISHED;
+    //     }
+    //     memcpy(recv_data, send_data, count);
+    //     for (int i = 0; i < n_processes; i++) {
+    //         if (i == rank) continue;
+    //         if (MIMPI_Recv(recv_data, count, i, -1) == MIMPI_ERROR_REMOTE_FINISHED)
+    //             return MIMPI_ERROR_REMOTE_FINISHED;
+    //     }
+    // }
+    // else {
+    //     if (MIMPI_Recv(recv_data, count, root, -1) == MIMPI_ERROR_REMOTE_FINISHED)
+    //         return MIMPI_ERROR_REMOTE_FINISHED;
+    //     if (MIMPI_Send(recv_data, count, root, -1) == MIMPI_ERROR_REMOTE_FINISHED)
+    //         return MIMPI_ERROR_REMOTE_FINISHED;
+    // }
+    // return MIMPI_SUCCESS;
 }
 
 
 
 
-// TODO : dodac obluge MIMPI_Retcode -> wychodzenie gdy sa zle wolania funkcji
+
+
+
+
+
+
+
 // TODO : dodac funkcje komunikacji grupowej
 // TODO : sprawdzic czy na pewno wszedzie sa asserty
-
-
-
 // TODO : sprawdzic czy na pewno wszedzie sa free
+
+
+
+/// japierdoleee sprawdzac wszedzie czy sa mutexy kurwa no

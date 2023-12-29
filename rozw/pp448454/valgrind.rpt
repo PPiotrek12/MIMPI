@@ -1,0 +1,15 @@
+==141294== Memcheck, a memory error detector
+==141294== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==141294== Using Valgrind-3.16.1 and LibVEX; rerun with -h for copyright info
+==141294== Command: ./mimpirun 10 test1
+==141294== Parent PID: 2197
+==141294== 
+==141294== 
+==141294== HEAP SUMMARY:
+==141294==     in use at exit: 0 bytes in 0 blocks
+==141294==   total heap usage: 567 allocs, 567 frees, 238,597 bytes allocated
+==141294== 
+==141294== All heap blocks were freed -- no leaks are possible
+==141294== 
+==141294== For lists of detected and suppressed errors, rerun with: -s
+==141294== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

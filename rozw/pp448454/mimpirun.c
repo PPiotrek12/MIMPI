@@ -73,7 +73,6 @@ int run_processes(int n, char* path, int argc, char** argv) {
         ASSERT_SYS_OK(close(i));
     }    
 
-
     // Wait for all child processes to finish.
     for (int i = 0; i < n; i++)
         ASSERT_SYS_OK(wait(NULL));
