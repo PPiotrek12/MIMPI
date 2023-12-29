@@ -182,20 +182,33 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
 
 
 // ======================================= SENDING MESSAGES =======================================
+int write_whole_message(int fd, const void *data, int count) {
+    int written_bytes = 0;
+    while(written_bytes < count) {
+        int to_write = count - written_bytes;
+        int written_now;
+        int res = written_now = chsend(fd, data + written_bytes, to_write);
+        if(res == -1 && errno == EPIPE) // Process finished.
+            return MIMPI_ERROR_REMOTE_FINISHED;
+        else if (res == -1)
+            ASSERT_SYS_OK(-1);
+        written_bytes += written_now;
+    }
+    return 0;
+}
+
 MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) {
     if (destination == rank)
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
     if (destination >= n_processes || destination < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    fflush(stdout);
-    chsend(from_me[destination], &count, 4);
-    chsend(from_me[destination], &tag, 4);
-    int res = chsend(from_me[destination], data, count);
-
-    if (res == - 1 && errno == EPIPE)
+    
+    if (write_whole_message(from_me[destination], &count, 4) == MIMPI_ERROR_REMOTE_FINISHED)
         return MIMPI_ERROR_REMOTE_FINISHED;
-    else if (res == -1)
-        ASSERT_SYS_OK(-1);
+    if (write_whole_message(from_me[destination], &tag, 4) == MIMPI_ERROR_REMOTE_FINISHED)
+        return MIMPI_ERROR_REMOTE_FINISHED;
+    if (write_whole_message(from_me[destination], data, count) == MIMPI_ERROR_REMOTE_FINISHED)
+        return MIMPI_ERROR_REMOTE_FINISHED;
     
     return MIMPI_SUCCESS;
 }

@@ -1,88 +1,84 @@
-// #include <stdbool.h>
-// #include <stdio.h>
-// #include "mimpi.h"
-// #include <unistd.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <sys/types.h>
-// #include <sys/wait.h>
-// #include <errno.h>
-
-
-// int main(int argc, char **argv)
-// { 
-//     MIMPI_Init(false);
-
-//     int const world_rank = MIMPI_World_rank();
-//     int size = MIMPI_World_size();
-//     int const tag = 17;
-
-//     char number;
-
-//     char *a = (void *) malloc(1);
-//     *a = 'a';
-
-//     if (world_rank == 0)
-//     {
-//         MIMPI_Send(a, 1, 1, tag);
-//         printf("wyslalem\n");
-//         fflush(stdout);
-//     }
-//     else if (world_rank == 1)
-//     {
-//         MIMPI_Recv(&number, 1, 0, tag);
-//         printf("odebralem\n");
-//         fflush(stdout);
-//     }
-
-//     //printf("koniec\n");
-
-
-//     // int b = MIMPI_Barrier();
-//     // printf("%d\n", b);
-    
-//     MIMPI_Finalize();
-
-//     return 0;
-// }
-
-
-
-
-
-
 #include <stdbool.h>
 #include <stdio.h>
 #include "mimpi.h"
-//#include "mimpi_err.h"
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <errno.h>
+
+
+#include <assert.h>
+#include <stdbool.h>
+#include <string.h>
+
+char data[21372137];
 
 int main(int argc, char **argv)
 {
     MIMPI_Init(false);
-    int const process_rank = MIMPI_World_rank();
-    int const size_of_cluster = MIMPI_World_size();
 
-    for (int i = 0; i < size_of_cluster; i++)
-    {
-        if (i == process_rank)
-        {
-            //printf("Hello World from process %d of %d\n", process_rank, size_of_cluster);
-            fflush(stdout);
-        }
-        int a = MIMPI_Barrier();
-        //printf("%d\n", a);
-        if(a != 0)
-        {
-            printf("ERROR\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-            fflush(stdout);
-        }
-        fflush(stdout);
+    int const world_rank = MIMPI_World_rank();
+
+    memset(data, world_rank == 0 ? 42 : 7, sizeof(data));
+
+    int const tag = 17;
+
+    if (world_rank == 0) {
         
+        MIMPI_Send(data, sizeof(data), 1, tag);
+        for (int i = 0; i < sizeof(data); i += 789) {
+            assert(data[789] == 42);
+        }
     }
-    //sleep(1);
+    else if (world_rank == 1)
+    {
+        MIMPI_Recv(data, sizeof(data), 0, tag);
+        printf("data[0]: %s\n", data);
+        for (int i = 0; i < sizeof(data); i += 789) {
+            assert(data[789] == 42);
+        }
+    }
+
     MIMPI_Finalize();
     return 0;
 }
+
+
+
+// #include <stdbool.h>
+// #include <stdio.h>
+// #include "mimpi.h"
+// //#include "mimpi_err.h"
+
+// int main(int argc, char **argv)
+// {
+//     MIMPI_Init(false);
+//     int const process_rank = MIMPI_World_rank();
+//     int const size_of_cluster = MIMPI_World_size();
+
+//     for (int i = 0; i < size_of_cluster; i++)
+//     {
+//         if (i == process_rank)
+//         {
+//             //printf("Hello World from process %d of %d\n", process_rank, size_of_cluster);
+//             fflush(stdout);
+//         }
+//         int a = MIMPI_Barrier();
+//         //printf("%d\n", a);
+//         if(a != 0)
+//         {
+//             printf("ERROR\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+//             fflush(stdout);
+//         }
+//         fflush(stdout);
+        
+//     }
+//     //sleep(1);
+//     MIMPI_Finalize();
+//     return 0;
+// }
 
 
 
