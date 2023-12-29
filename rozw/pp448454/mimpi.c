@@ -11,8 +11,7 @@
 
 int rank, n_processes;
 int *to_me, *from_me;
-pthread_mutex_t list_mutex; // Mutex for list.
-pthread_mutex_t waiting_for_message; // Semaphore for waiting for message.
+pthread_mutex_t my_mutex; 
 pthread_cond_t waiting_for_message_cond; // Condition for waiting for message.
 pthread_t *threads;
 int *args;
@@ -68,15 +67,24 @@ void remove_from_list(struct list_elem *elem) {
 }
 
 
+int list_size() {
+    // int size = 0;
+    // struct list_elem *elem = head->next;
+    // while(elem != tail) {
+    //     size++;
+    //     elem = elem->next;
+    // }
+    // return size;
+}
+
+
 // ====================================== RECEIVING MESSAGES ======================================
 int read_whole_message(int fd, void *data, int count) {
     int read_bytes = 0;
     while(read_bytes < count) {
         int to_read = count - read_bytes;
         int read_now;
-        //printf("chce czytac %d\n", rank);
         int res = read_now = chrecv(fd, data + read_bytes, to_read);
-        //printf("%d data: %s, %d\n", rank, data, res);
         if(res == -1 && errno == EBADF) // Thread interrupted.
             return -1;
         else if (res == -1)
@@ -84,7 +92,6 @@ int read_whole_message(int fd, void *data, int count) {
         if (res == 0) {
             return -2;
         } // Process finished.
-        //printf("count: %d\n", count);
 
         read_bytes += read_now;
     }
@@ -96,7 +103,6 @@ void* wait_for_messages(void* arg) {
     while(1) {
         int count, tag;
         int ret = read_whole_message(to_me[i], &count, 4);
-
         if (ret == -1) break;
 
         void *data = NULL;
@@ -111,26 +117,21 @@ void* wait_for_messages(void* arg) {
                     break;
         }
 
-        ASSERT_SYS_OK(pthread_mutex_lock(&waiting_for_message));
+        ASSERT_SYS_OK(pthread_mutex_lock(&my_mutex));
         if (ret == -2) { // Process from which we want to read finished.
-            //printf("ZLE\n");
             finished[i] = true;
             if (if_waiting_for_message && w_source == i) 
                 ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
-            ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
+            ASSERT_SYS_OK(pthread_mutex_unlock(&my_mutex));
             break;
         }
-        ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
-
-        ASSERT_SYS_OK(pthread_mutex_lock(&list_mutex));
         add_to_list(data, count, tag, i);
-        ASSERT_SYS_OK(pthread_mutex_unlock(&list_mutex));
 
-        ASSERT_SYS_OK(pthread_mutex_lock(&waiting_for_message));
         if(if_waiting_for_message && w_count == count && w_source == i && 
             (w_tag == tag || w_tag == MIMPI_ANY_TAG)) 
             ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
-        ASSERT_SYS_OK(pthread_mutex_unlock(&waiting_for_message));
+
+        ASSERT_SYS_OK(pthread_mutex_unlock(&my_mutex));
     }
     return NULL;
 }
@@ -138,21 +139,16 @@ void* wait_for_messages(void* arg) {
 
 // Returns 1 if found, 0 otherwise.
 int search_for_message(void *data, int count, int source, int tag) {
-    ASSERT_ZERO(pthread_mutex_lock(&list_mutex));
     struct list_elem *elem = head->next;
     while(elem != tail) {
         if(elem->msg->count == count && elem->msg->source == source && 
             (elem->msg->tag == tag || tag == MIMPI_ANY_TAG)) {
             memcpy(data, elem->msg->data, count);
             remove_from_list(elem);
-            ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
-            
             return true;
         }
         elem = elem->next;
     }
-    
-    ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
     return false;
 }
 
@@ -162,43 +158,38 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
     if (source >= n_processes || source < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    if (!search_for_message(data, count, source, tag)) {
-        while(1) {
-            ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
-            if (finished[source]) {
-                ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
-                return MIMPI_ERROR_REMOTE_FINISHED;
-            }
 
-            if_waiting_for_message = true;
-            w_tag = tag;
-            w_count = count;
-            w_source = source;
-            //printf("%d: czekam na %d     %d\n", rank, source, list_size());
-            fflush(stdout);
-            ASSERT_ZERO(pthread_cond_wait(&waiting_for_message_cond, &waiting_for_message));
-            //printf("%d: skonczylem czekac na %d   %d\n", rank, source, list_size());
-            fflush(stdout);
-            if_waiting_for_message = false;
-            ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
+    ASSERT_SYS_OK(pthread_mutex_lock(&my_mutex));
 
-            if (search_for_message(data, count, source, tag))
-                return MIMPI_SUCCESS;
-            ASSERT_ZERO(pthread_mutex_lock(&waiting_for_message));
-            if (finished[source]) {
-                
-                if_waiting_for_message = false;
-                ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
-                return MIMPI_ERROR_REMOTE_FINISHED;
-            }
-            ASSERT_ZERO(pthread_mutex_unlock(&waiting_for_message));
-        }
-    }
-    else 
+    if (search_for_message(data, count, source, tag)) {
+        ASSERT_ZERO(pthread_mutex_unlock(&my_mutex));
         return MIMPI_SUCCESS;
+    }
+
+    if (finished[source]) {
+        ASSERT_ZERO(pthread_mutex_unlock(&my_mutex));
+        return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    if_waiting_for_message = true;
+    w_tag = tag;
+    w_count = count;
+    w_source = source;
+
+    while(!search_for_message(data, count, source, tag) && !finished[source]) {
+        printf("%d: czekam na %d     %d\n", rank, source, list_size()); fflush(stdout);
+        ASSERT_ZERO(pthread_cond_wait(&waiting_for_message_cond, &my_mutex));
+        printf("%d: skonczylem czekac na %d   %d\n", rank, source, list_size()); fflush(stdout);
+    }
+    if_waiting_for_message = false;
+
+    if (finished[source]) {
+        ASSERT_ZERO(pthread_mutex_unlock(&my_mutex));
+        return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    ASSERT_SYS_OK(pthread_mutex_unlock(&my_mutex));
+
+    return MIMPI_SUCCESS;
 }
-
-
 
 
 
@@ -208,11 +199,10 @@ MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) 
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
     if (destination >= n_processes || destination < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    //printf("%d: wysylam do %d     %d\n", rank, destination, list_size());
+    printf("%d: wysylam do %d     %d\n", rank, destination, list_size());
     fflush(stdout);
     chsend(from_me[destination], &count, 4);
     chsend(from_me[destination], &tag, 4);
-    //printf("wysylam: %d\n", count );
     int res = chsend(from_me[destination], data, count);
 
     if (res == - 1 && errno == EPIPE)
@@ -279,8 +269,7 @@ void MIMPI_Init(bool enable_deadlock_detection) {
     n_processes = atoi(getenv("MIMPI_N"));  
     set_descriptors();
 
-    ASSERT_ZERO(pthread_mutex_init(&list_mutex, NULL));
-    ASSERT_ZERO(pthread_mutex_init(&waiting_for_message, NULL));
+    ASSERT_ZERO(pthread_mutex_init(&my_mutex, NULL));
     ASSERT_ZERO(pthread_cond_init(&waiting_for_message_cond, NULL));
 
     // Creating list.
@@ -334,7 +323,7 @@ void MIMPI_Finalize() {
     free(from_me);
 
     // Closing list.
-    ASSERT_ZERO(pthread_mutex_lock(&list_mutex));
+    ASSERT_ZERO(pthread_mutex_lock(&my_mutex));
     struct list_elem *elem = head->next;
     while(elem != tail) {
         remove_from_list(elem);
@@ -342,10 +331,9 @@ void MIMPI_Finalize() {
     }
     free(head);
     free(tail);
-    ASSERT_ZERO(pthread_mutex_unlock(&list_mutex));
+    ASSERT_ZERO(pthread_mutex_unlock(&my_mutex));
 
-    ASSERT_ZERO(pthread_mutex_destroy(&list_mutex));
-    ASSERT_ZERO(pthread_mutex_destroy(&waiting_for_message));
+    ASSERT_ZERO(pthread_mutex_destroy(&my_mutex));
     ASSERT_ZERO(pthread_cond_destroy(&waiting_for_message_cond));
 
     channels_finalize();

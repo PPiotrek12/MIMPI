@@ -22,27 +22,19 @@
 //     char *a = (void *) malloc(1);
 //     *a = 'a';
 
-//     a = (void *) malloc(1);
-//     *a = 'a';
-//     // printf("XD\n");
-    
-//     for(int i = 0; i < 2; i++) {
-//         // MIMPI_Barrier();;
-//         for (int i = 0; i < size; i++) {
-//             if (i == world_rank) continue;    
-//             printf ("send: %d\n", MIMPI_Send(a, 1, i, -1));
-//         }
-//         //sleep(1);
-//         char b;
-//         for (int i = 0; i < size; i++) {
-//             if (i == world_rank) continue;
-//             printf("receive: %d\n", MIMPI_Recv(&b, 1, i, -1));
-            
-//         }
-        
+//     if (world_rank == 0)
+//     {
+//         MIMPI_Send(a, 1, 1, tag);
+//         printf("wyslalem\n");
+//         fflush(stdout);
+//     }
+//     else if (world_rank == 1)
+//     {
+//         MIMPI_Recv(&number, 1, 0, tag);
+//         printf("odebralem\n");
+//         fflush(stdout);
 //     }
 
-    
 //     //printf("koniec\n");
 
 
@@ -70,7 +62,7 @@ int main(int argc, char **argv)
     int const process_rank = MIMPI_World_rank();
     int const size_of_cluster = MIMPI_World_size();
 
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < size_of_cluster; i++)
     {
         if (i == process_rank)
         {
