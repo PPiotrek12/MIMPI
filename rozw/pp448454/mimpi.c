@@ -16,6 +16,7 @@ pthread_cond_t waiting_for_message_cond; // Condition for waiting for message.
 pthread_t *threads;
 int *args;
 bool *finished;
+bool message_found = false;
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -66,18 +67,6 @@ void remove_from_list(struct list_elem *elem) {
     free(elem);
 }
 
-
-int list_size() {
-    // int size = 0;
-    // struct list_elem *elem = head->next;
-    // while(elem != tail) {
-    //     size++;
-    //     elem = elem->next;
-    // }
-    // return size;
-}
-
-
 // ====================================== RECEIVING MESSAGES ======================================
 int read_whole_message(int fd, void *data, int count) {
     int read_bytes = 0;
@@ -120,6 +109,7 @@ void* wait_for_messages(void* arg) {
         ASSERT_SYS_OK(pthread_mutex_lock(&my_mutex));
         if (ret == -2) { // Process from which we want to read finished.
             finished[i] = true;
+            
             if (if_waiting_for_message && w_source == i) 
                 ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
             ASSERT_SYS_OK(pthread_mutex_unlock(&my_mutex));
@@ -145,6 +135,7 @@ int search_for_message(void *data, int count, int source, int tag) {
             (elem->msg->tag == tag || tag == MIMPI_ANY_TAG)) {
             memcpy(data, elem->msg->data, count);
             remove_from_list(elem);
+            message_found = true;
             return true;
         }
         elem = elem->next;
@@ -174,20 +165,17 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
     w_tag = tag;
     w_count = count;
     w_source = source;
-
-    while(!search_for_message(data, count, source, tag) && !finished[source]) {
-        printf("%d: czekam na %d     %d\n", rank, source, list_size()); fflush(stdout);
+    message_found = false;
+    while(!search_for_message(data, count, source, tag) && !finished[source])
         ASSERT_ZERO(pthread_cond_wait(&waiting_for_message_cond, &my_mutex));
-        printf("%d: skonczylem czekac na %d   %d\n", rank, source, list_size()); fflush(stdout);
-    }
+
     if_waiting_for_message = false;
 
-    if (finished[source]) {
+    if (!message_found) {
         ASSERT_ZERO(pthread_mutex_unlock(&my_mutex));
         return MIMPI_ERROR_REMOTE_FINISHED;
     }
     ASSERT_SYS_OK(pthread_mutex_unlock(&my_mutex));
-
     return MIMPI_SUCCESS;
 }
 
@@ -199,7 +187,6 @@ MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) 
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
     if (destination >= n_processes || destination < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    printf("%d: wysylam do %d     %d\n", rank, destination, list_size());
     fflush(stdout);
     chsend(from_me[destination], &count, 4);
     chsend(from_me[destination], &tag, 4);

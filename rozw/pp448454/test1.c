@@ -66,11 +66,16 @@ int main(int argc, char **argv)
     {
         if (i == process_rank)
         {
-            printf("Hello World from process %d of %d\n", process_rank, size_of_cluster);
+            //printf("Hello World from process %d of %d\n", process_rank, size_of_cluster);
             fflush(stdout);
         }
         int a = MIMPI_Barrier();
-        printf("%d\n", a);
+        //printf("%d\n", a);
+        if(a != 0)
+        {
+            printf("ERROR\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+            fflush(stdout);
+        }
         fflush(stdout);
         
     }
