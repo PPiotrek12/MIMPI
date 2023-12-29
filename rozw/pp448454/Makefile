@@ -9,31 +9,20 @@ TESTS := $(wildcard tests/*.self)
 
 CHANNEL_SRC := channel.c channel.h
 MIMPI_COMMON_SRC := $(CHANNEL_SRC) mimpi_common.c mimpi_common.h
-#MIMPI_COMMON_SRC := mimpi_common.c mimpi_common.h
-
 MIMPIRUN_SRC := $(MIMPI_COMMON_SRC) mimpirun.c
-
 MIMPI_SRC := $(MIMPI_COMMON_SRC) mimpi.c mimpi.h
 
-# all: mimpirun $(EXAMPLES) $(TESTS)
-all: mimpirun
-all: test1
+all: mimpirun $(EXAMPLES) $(TESTS)
 
 mimpirun: $(MIMPIRUN_SRC)
 	gcc $(CFLAGS) -o $@ $(filter %.c,$^) -lpthread
 
-
-test1: test1.c $(MIMPI_SRC)
+examples_build/%: examples/%.c $(MIMPI_SRC)
+	mkdir -p examples_build
 	gcc $(CFLAGS) -o $@ $(filter %.c,$^) -lpthread
 
-
-# examples_build/%: examples/%.c $(MIMPI_SRC)
-# 	mkdir -p examples_build
-# 	gcc $(CFLAGS) -o $@ $(filter %.c,$^)
-
-# assignment.zip: $(CHANGED_FILES)
-# 	zip assignment.zip $(CHANGED_FILES)
+assignment.zip: $(CHANGED_FILES)
+	zip assignment.zip $(CHANGED_FILES)
 
 clean:
 	rm -rf mimpirun assignment.zip examples_build
-

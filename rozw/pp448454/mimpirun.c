@@ -64,7 +64,7 @@ int run_processes(int n, char* path, int argc, char** argv) {
                 args[j - 2] = argv[j];
             }
             args[argc - 2] = NULL;
-            ASSERT_SYS_OK(execv(path, args));  // TODO : czy to jest ok - cos mialo sie znajdowac w PATH?
+            ASSERT_SYS_OK(execvp(path, args));  // TODO : czy to jest ok - cos mialo sie znajdowac w PATH?
             return 1;
         }
     }

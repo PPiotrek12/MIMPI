@@ -368,17 +368,16 @@ int MIMPI_World_rank() {
 
 
 
+// ======================================= GROUP FUNCTIONS ========================================
 
 int counter = 0;
 MIMPI_Retcode MIMPI_Barrier() {
-    
     counter++;
     for (int i = 0; i < n_processes; i++) {
         if (i == rank) continue;
         if (MIMPI_Send(example_message, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
             return MIMPI_ERROR_REMOTE_FINISHED;
     }
-
     char b;
     for (int i = 0; i < n_processes; i++) {
         if (i == rank) continue;
@@ -389,48 +388,63 @@ MIMPI_Retcode MIMPI_Barrier() {
 }
 
 MIMPI_Retcode MIMPI_Bcast(void *data, int count, int root) {
-    if (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED)
+    if (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED) 
         return MIMPI_ERROR_REMOTE_FINISHED;
-    
     if (root >= n_processes || root < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
+    
+    counter++;
     if (root == rank) {
         for (int i = 0; i < n_processes; i++) {
             if (i == rank) continue;
-            if (MIMPI_Send(data, count, i, -1) == MIMPI_ERROR_REMOTE_FINISHED)
-                return MIMPI_ERROR_REMOTE_FINISHED;
+            MIMPI_Send(data, count, i, -counter);
         }
     }
-    else {
-        if (MIMPI_Recv(data, count, root, -1) == MIMPI_ERROR_REMOTE_FINISHED)
-            return MIMPI_ERROR_REMOTE_FINISHED;
-    }
+    else 
+        MIMPI_Recv(data, count, root, -counter);
     return MIMPI_SUCCESS;
 }
 
+
+
+u_int8_t ope(int op, u_int8_t a, u_int8_t b) {
+    if (op == MIMPI_SUM) 
+        return a + b;
+    else if (op == MIMPI_MAX) {
+        if (a < b) return b;
+    }
+    else if (op == MIMPI_MIN) {
+        if (a > b) return b;
+    }
+    else if (op == MIMPI_PROD) return a * b;
+    return a;
+}
+
+
 MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MIMPI_Op op, int root ) {
-    // if (root >= n_processes || root < 0) // TODO: czy to jest ok?
-    //     return MIMPI_ERROR_NO_SUCH_RANK;
-    // if (root == rank) {
-    //     for (int i = 0; i < n_processes; i++) {
-    //         if (i == rank) continue;
-    //         if (MIMPI_Send(send_data, count, i, -1) == MIMPI_ERROR_REMOTE_FINISHED)
-    //             return MIMPI_ERROR_REMOTE_FINISHED;
-    //     }
-    //     memcpy(recv_data, send_data, count);
-    //     for (int i = 0; i < n_processes; i++) {
-    //         if (i == rank) continue;
-    //         if (MIMPI_Recv(recv_data, count, i, -1) == MIMPI_ERROR_REMOTE_FINISHED)
-    //             return MIMPI_ERROR_REMOTE_FINISHED;
-    //     }
-    // }
-    // else {
-    //     if (MIMPI_Recv(recv_data, count, root, -1) == MIMPI_ERROR_REMOTE_FINISHED)
-    //         return MIMPI_ERROR_REMOTE_FINISHED;
-    //     if (MIMPI_Send(recv_data, count, root, -1) == MIMPI_ERROR_REMOTE_FINISHED)
-    //         return MIMPI_ERROR_REMOTE_FINISHED;
-    // }
-    // return MIMPI_SUCCESS;
+    if (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED) 
+        return MIMPI_ERROR_REMOTE_FINISHED;
+
+    if (root >= n_processes || root < 0) // TODO: czy to jest ok?
+        return MIMPI_ERROR_NO_SUCH_RANK;
+
+    counter++;
+    if (rank == root) {
+        memcpy(recv_data, send_data, count);
+        for (int i = 0; i < n_processes; i++) {
+            if (i == rank) continue;
+            u_int8_t *data = (void *) malloc(count);
+            if (data == NULL)
+                ASSERT_SYS_OK(-1);
+            MIMPI_Recv(data, count, i, -counter);
+            for (int j = 0; j < count; j++)
+                *(u_int8_t *)((u_int8_t *)recv_data + j) = ope(op, ((u_int8_t *)recv_data)[j], data[j]);
+            free(data);
+        }
+    }
+    else 
+        MIMPI_Send(send_data, count, root, -counter);
+    return MIMPI_SUCCESS;
 }
 
 
@@ -442,8 +456,6 @@ MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MI
 
 
 
-
-// TODO : dodac funkcje komunikacji grupowej
 // TODO : sprawdzic czy na pewno wszedzie sa asserty
 // TODO : sprawdzic czy na pewno wszedzie sa free
 
