@@ -5,6 +5,7 @@
         "stdio.h": "c",
         "mimpi.h": "c",
         "stdnoreturn.h": "c",
-        "mimpi_err.h": "c"
+        "mimpi_err.h": "c",
+        "wait.h": "c"
     }
 }

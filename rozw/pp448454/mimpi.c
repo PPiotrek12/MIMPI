@@ -17,6 +17,7 @@ pthread_t *threads;
 int *args;
 bool *finished;
 bool message_found = false;
+char *example_message;
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -66,6 +67,9 @@ void remove_from_list(struct list_elem *elem) {
     free(elem->msg);
     free(elem);
 }
+
+
+
 
 // ====================================== RECEIVING MESSAGES ======================================
 int read_whole_message(int fd, void *data, int count) {
@@ -127,7 +131,9 @@ void* wait_for_messages(void* arg) {
 }
 
 
-// Returns 1 if found, 0 otherwise.
+
+
+// Returns 1 and sets message_found = true if found, 0 otherwise.
 int search_for_message(void *data, int count, int source, int tag) {
     struct list_elem *elem = head->next;
     while(elem != tail) {
@@ -181,6 +187,7 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
 
 
 
+
 // ======================================= SENDING MESSAGES =======================================
 int write_whole_message(int fd, const void *data, int count) {
     int written_bytes = 0;
@@ -212,7 +219,6 @@ MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) 
     
     return MIMPI_SUCCESS;
 }
-
 
 
 
@@ -288,6 +294,12 @@ void MIMPI_Init(bool enable_deadlock_detection) {
     for(int i = 0; i < n_processes; i++)
         finished[i] = false;
 
+
+    example_message = (void *) malloc(1);
+    if (example_message == NULL)
+        ASSERT_SYS_OK(-1);
+    *example_message = 'a';
+
     // Creating threads.
     threads = (void *) malloc(n_processes * sizeof(pthread_t));
     args = (void *) malloc(n_processes * sizeof(int));
@@ -321,6 +333,7 @@ void MIMPI_Finalize() {
     free(args);
     free(to_me);
     free(from_me);
+    free(example_message);
 
     // Closing list.
     ASSERT_ZERO(pthread_mutex_lock(&my_mutex));
@@ -358,27 +371,20 @@ int MIMPI_World_rank() {
 
 int counter = 0;
 MIMPI_Retcode MIMPI_Barrier() {
-    char *a;
-    a = (void *) malloc(1);
-    if (a == NULL)
-        ASSERT_SYS_OK(-1);
-    *a = 'a';
+    
     counter++;
     for (int i = 0; i < n_processes; i++) {
         if (i == rank) continue;
-        
-        if (MIMPI_Send(a, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+        if (MIMPI_Send(example_message, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
             return MIMPI_ERROR_REMOTE_FINISHED;
     }
 
     char b;
     for (int i = 0; i < n_processes; i++) {
         if (i == rank) continue;
-        char a;
         if (MIMPI_Recv(&b, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
             return MIMPI_ERROR_REMOTE_FINISHED;
     }
-    
     return MIMPI_SUCCESS;
 }
 
