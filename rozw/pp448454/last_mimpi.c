@@ -23,7 +23,6 @@ bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
 
 
-
 // ======================================= LIST OF MESSAGES =======================================
 struct message {
     int tag;
@@ -37,17 +36,6 @@ struct list_elem {
     struct list_elem *next;
     struct list_elem *prev;
 } *head, *tail;
-
-void list_init() {
-    head = (void *) malloc(sizeof(struct list_elem));
-    tail = (void *) malloc(sizeof(struct list_elem));
-    if (head == NULL || tail == NULL)
-        ASSERT_SYS_OK(-1);
-    head->next = tail;
-    head->prev = NULL;
-    tail->next = NULL;
-    tail->prev = head;
-}
 
 void add_to_list(char *data, int count, int tag, int source) {
     struct message *msg = (void *) malloc(sizeof(struct message));
@@ -80,27 +68,6 @@ void remove_from_list(struct list_elem *elem) {
     free(elem);
 }
 
-void destroy_list() {
-    ASSERT_ZERO(pthread_mutex_lock(&my_mutex));
-    struct list_elem *elem = head->next;
-    while(elem != tail) {
-        remove_from_list(elem);
-        elem = elem->next;
-    }
-    free(head);
-    free(tail);
-    ASSERT_ZERO(pthread_mutex_unlock(&my_mutex));
-}
-
-void free_memory() {
-    free(threads);
-    free(args);
-    free(to_me);
-    free(from_me);
-    free(example_message);
-    free(finished);
-    destroy_list();
-}
 
 
 
@@ -113,10 +80,12 @@ int read_whole_message(int fd, void *data, int count) {
         int res = read_now = chrecv(fd, data + read_bytes, to_read);
         if(res == -1 && errno == EBADF) // Thread interrupted.
             return -1;
-        else if (res == -1) // Other error.
+        else if (res == -1)
             ASSERT_SYS_OK(-1);
-        if (res == 0) // Process finished.
-            return MIMPI_ERROR_REMOTE_FINISHED;
+        if (res == 0) {
+            return -2;
+        } // Process finished.
+
         read_bytes += read_now;
     }
     return 0;
@@ -130,11 +99,11 @@ void* wait_for_messages(void* arg) {
         if (ret == -1) break;
 
         void *data = NULL;
-        if (ret != MIMPI_ERROR_REMOTE_FINISHED) { // If there is any data to read.
+        if (ret != -2) { // If there is any data to read.
             if (read_whole_message(to_me[i], &tag, 4) == -1) break;
 
             data = (void *) malloc(count);
-            if (data == NULL) // TODO: przetestowac wysylanie 0 bajtow - czy malloc nie zwroci null?
+            if (data == NULL)
                 ASSERT_SYS_OK(-1);
             if (count != 0)
                 if (read_whole_message(to_me[i], data, count) == -1) 
@@ -142,7 +111,7 @@ void* wait_for_messages(void* arg) {
         }
 
         ASSERT_SYS_OK(pthread_mutex_lock(&my_mutex));
-        if (ret == MIMPI_ERROR_REMOTE_FINISHED) { // Process from which we want to read finished.
+        if (ret == -2) { // Process from which we want to read finished.
             finished[i] = true;
             
             if (if_waiting_for_message && w_source == i) 
@@ -161,6 +130,9 @@ void* wait_for_messages(void* arg) {
     return NULL;
 }
 
+
+
+
 // Returns 1 and sets message_found = true if found, 0 otherwise.
 int search_for_message(void *data, int count, int source, int tag) {
     struct list_elem *elem = head->next;
@@ -176,6 +148,7 @@ int search_for_message(void *data, int count, int source, int tag) {
     }
     return false;
 }
+
 
 MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
     if (source == rank)
@@ -214,6 +187,7 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
 
 
 
+
 // ======================================= SENDING MESSAGES =======================================
 int write_whole_message(int fd, const void *data, int count) {
     int written_bytes = 0;
@@ -248,6 +222,7 @@ MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) 
 
 
 
+
 // ======================================== INITIALIZATION ========================================
 void set_descriptors() {
     char* rank_str = getenv("MIMPI_RANK");
@@ -260,12 +235,20 @@ void set_descriptors() {
         if(i == rank) continue;
         char i_str[10];
         sprintf(i_str, "%d", i);
+
         char name[100] = "MIMPI_";
-        strcat(name, rank_str), strcat(name, "_TO_"), strcat(name, i_str), strcat(name, "_WRITE");
+        strcat(name, rank_str);
+        strcat(name, "_TO_");
+        strcat(name, i_str);
+        strcat(name, "_WRITE");
         char* val = getenv(name);
         from_me[i] = atoi(val);
+
         char name2[100] = "MIMPI_";
-        strcat(name2, i_str), strcat(name2, "_TO_"), strcat(name2, rank_str), strcat(name2, "_READ");
+        strcat(name2, i_str);
+        strcat(name2, "_TO_");
+        strcat(name2, rank_str);
+        strcat(name2, "_READ");
         val = getenv(name2);
         to_me[i] = atoi(val);
     }
@@ -291,16 +274,26 @@ void MIMPI_Init(bool enable_deadlock_detection) {
     rank = atoi(getenv("MIMPI_RANK"));
     n_processes = atoi(getenv("MIMPI_N"));  
     set_descriptors();
-    list_init();
 
     ASSERT_ZERO(pthread_mutex_init(&my_mutex, NULL));
     ASSERT_ZERO(pthread_cond_init(&waiting_for_message_cond, NULL));
+
+    // Creating list.
+    head = (void *) malloc(sizeof(struct list_elem));
+    tail = (void *) malloc(sizeof(struct list_elem));
+    if (head == NULL || tail == NULL)
+        ASSERT_SYS_OK(-1);
+    head->next = tail;
+    head->prev = NULL;
+    tail->next = NULL;
+    tail->prev = head;
 
     finished = (void *) malloc(n_processes * sizeof(bool));
     if (finished == NULL)
         ASSERT_SYS_OK(-1);
     for(int i = 0; i < n_processes; i++)
         finished[i] = false;
+
 
     example_message = (void *) malloc(1);
     if (example_message == NULL)
@@ -321,6 +314,7 @@ void MIMPI_Init(bool enable_deadlock_detection) {
 
 
 
+
 // ========================================= FINALIZATION =========================================
 void MIMPI_Finalize() {
     // Closing mine descriptors.
@@ -335,11 +329,29 @@ void MIMPI_Finalize() {
         if(i == rank) continue;
         ASSERT_SYS_OK(pthread_join(threads[i], NULL));
     }
-    free_memory();
+    free(threads);
+    free(args);
+    free(to_me);
+    free(from_me);
+    free(example_message);
+
+    // Closing list.
+    ASSERT_ZERO(pthread_mutex_lock(&my_mutex));
+    struct list_elem *elem = head->next;
+    while(elem != tail) {
+        remove_from_list(elem);
+        elem = elem->next;
+    }
+    free(head);
+    free(tail);
+    ASSERT_ZERO(pthread_mutex_unlock(&my_mutex));
+
     ASSERT_ZERO(pthread_mutex_destroy(&my_mutex));
     ASSERT_ZERO(pthread_cond_destroy(&waiting_for_message_cond));
+
     channels_finalize();
 }
+
 
 
 
@@ -354,7 +366,10 @@ int MIMPI_World_rank() {
 
 
 
+
+
 // ======================================= GROUP FUNCTIONS ========================================
+
 int counter = 0;
 MIMPI_Retcode MIMPI_Barrier() {
     counter++;
@@ -390,6 +405,8 @@ MIMPI_Retcode MIMPI_Bcast(void *data, int count, int root) {
     return MIMPI_SUCCESS;
 }
 
+
+
 u_int8_t ope(int op, u_int8_t a, u_int8_t b) {
     if (op == MIMPI_SUM) 
         return a + b;
@@ -402,6 +419,7 @@ u_int8_t ope(int op, u_int8_t a, u_int8_t b) {
     else if (op == MIMPI_PROD) return a * b;
     return a;
 }
+
 
 MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MIMPI_Op op, int root ) {
     if (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED) 
@@ -435,12 +453,3 @@ MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MI
 
 
 
-
-
-
-// TODO : sprawdzic czy na pewno wszedzie sa asserty
-// TODO : sprawdzic czy na pewno wszedzie sa free
-
-
-
-/// japierdoleee sprawdzac wszedzie czy sa mutexy kurwa no
