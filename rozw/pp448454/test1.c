@@ -38,6 +38,7 @@ int main() {
         u_int8_t *recv_data = malloc(count * sizeof(u_int8_t));
 
         MIMPI_Reduce(send_data, recv_data, count, MIMPI_PROD, 0);
+        
         free(recv_data);
     }
 
