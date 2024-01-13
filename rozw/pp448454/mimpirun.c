@@ -54,7 +54,7 @@ int run_processes(int n, char* path, int argc, char** argv) {
         char rank[10];
         sprintf(rank, "%d", i);
         setenv("MIMPI_RANK", rank, 1);
-
+    
         pid_t pid;
         ASSERT_SYS_OK(pid = fork());
         if (pid == 0) {
