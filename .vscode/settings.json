@@ -6,6 +6,8 @@
         "mimpi.h": "c",
         "stdnoreturn.h": "c",
         "mimpi_err.h": "c",
-        "wait.h": "c"
+        "wait.h": "c",
+        "test.h": "c",
+        "type_traits": "c"
     }
 }

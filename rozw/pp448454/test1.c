@@ -8,41 +8,19 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include "mimpi.h"
-
-int main() {
-    // Test case 1: Testing with integers
-
-    MIMPI_Init(0);
+#include <assert.h>
+#include "examples/test.h"
 
 
-    int rank = MIMPI_World_rank();
-    
-    if (rank == 0) {
-        u_int8_t send_data[] = {1, 2, 3, 4, 5};
-        u_int8_t count = sizeof(send_data) / sizeof(send_data[0]);
-        u_int8_t *recv_data = malloc(count * sizeof(u_int8_t));
-        
-        
-        MIMPI_Reduce(send_data, recv_data, count, MIMPI_PROD, 0);
-        
-        for( int i = 0; i < count; i++) {
-            printf ("%d ", ((u_int8_t *)recv_data)[i]);
-        }
-        printf("\n");
-        free(recv_data);
+int main(int argc, char **argv) {
+    int to_break = atoi(argv[1]);
+    MIMPI_Init(false);
+    if (MIMPI_World_rank() != to_break) {
+        printf("%d\n", (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED));
+    } else {
+        printf("%d breaking barrier\n", MIMPI_World_rank());    
+        sleep(1);
     }
-    else {
-        u_int8_t send_data[] = {4, 2, 4, 1, 9};
-        u_int8_t count = sizeof(send_data) / sizeof(send_data[0]);
-
-        u_int8_t *recv_data = malloc(count * sizeof(u_int8_t));
-
-        MIMPI_Reduce(send_data, recv_data, count, MIMPI_PROD, 0);
-        
-        free(recv_data);
-    }
-
     MIMPI_Finalize();
-    return 0;
+    return test_success();
 }
-

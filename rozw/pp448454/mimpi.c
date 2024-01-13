@@ -84,8 +84,9 @@ void destroy_list() {
     ASSERT_ZERO(pthread_mutex_lock(&my_mutex));
     struct list_elem *elem = head->next;
     while(elem != tail) {
+        struct list_elem *next = elem->next;
         remove_from_list(elem);
-        elem = elem->next;
+        elem = next;
     }
     free(head);
     free(tail);
@@ -329,7 +330,6 @@ void MIMPI_Finalize() {
         ASSERT_SYS_OK(close(to_me[i]));
         ASSERT_SYS_OK(close(from_me[i]));
     }
-
     // Waiting for threads to finish.
     for(int i = 0; i < n_processes; i++) { 
         if(i == rank) continue;
@@ -339,6 +339,7 @@ void MIMPI_Finalize() {
     ASSERT_ZERO(pthread_mutex_destroy(&my_mutex));
     ASSERT_ZERO(pthread_cond_destroy(&waiting_for_message_cond));
     channels_finalize();
+    
 }
 
 
