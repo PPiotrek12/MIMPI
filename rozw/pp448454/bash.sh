@@ -1,11 +1,6 @@
 
 for (( i=0; i<1000000; i++ ))
 do
-    ./mimpirun 2 test1
-    
-    # BEGIN: ed8c6549bwf9
-    if (( i % 1000 == 0 )); then
-        echo "Test $i"
-    fi
-    # END: ed8c6549bwf9
+    ./run_test 0.4s 16 ./examples_build/all_my_file_desc
+
 done

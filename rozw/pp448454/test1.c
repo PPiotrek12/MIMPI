@@ -16,18 +16,15 @@ int main(int argc, char **argv) {
     MIMPI_Init(false);
     int rank = MIMPI_World_rank();
 
-
-    int const process_rank = MIMPI_World_rank();
-    int const size_of_cluster = MIMPI_World_size();
-
-    for (int i = 0; i < size_of_cluster; i++)
-    {
-        if (i == process_rank)
-        {
-            printf("Hello World from process %d of %d\n", process_rank, size_of_cluster);
-            fflush(stdout);
-        }
-        MIMPI_Barrier();
+    if (rank == 0) {
+        char *data = "Hello world!";
+        MIMPI_Bcast(data, 11, 0);
+        printf("wyslalem\n");
+    }
+    else {
+        char *data = malloc(11);
+        MIMPI_Bcast(data, 11, 0);
+        printf("Received: %s\n", data);
     }
 
     MIMPI_Finalize();

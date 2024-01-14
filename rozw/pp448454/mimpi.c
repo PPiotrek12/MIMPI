@@ -120,7 +120,6 @@ void* wait_for_messages(void* arg) {
         int count, tag;
         int ret = read_whole_message(to_me[i], &count, 4);
         if (ret == -1) break;
-
         void *data = NULL;
         if (ret != MIMPI_ERROR_REMOTE_FINISHED) { // If there is any data to read.
             if (read_whole_message(to_me[i], &tag, 4) == -1) break;
@@ -387,59 +386,75 @@ int MIMPI_World_rank() {
 // ======================================= GROUP FUNCTIONS ========================================
 int counter = 0;
 MIMPI_Retcode MIMPI_Barrier() {
-    counter++;
-
     // Waiting for messages from processes below.
+    counter++;
     char b;
     for (int i = 0; i < n_processes; i++) {
         if (graph_down[rank][i] == 0) continue;
         if (MIMPI_Recv(&b, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
             return MIMPI_ERROR_REMOTE_FINISHED;
-        if(rank  == 0) {
-            //printf("UWAGA:::::: 0 otrzymalo wiadomosc od: %d\n", i);
-            fflush(stdout);
-        }
-            
     }
+
     // Sending message to process above.
-    if (rank != 0) {
-        //printf("wysylam: %d do: %d\n", rank, graph_up[rank]);
-        fflush(stdout);
+    if (rank != 0)
         if (MIMPI_Send(example_message, 1, graph_up[rank], -counter) == MIMPI_ERROR_REMOTE_FINISHED)
             return MIMPI_ERROR_REMOTE_FINISHED;
-    }
-    counter++;
+    
     // Waiting for message from process above.
-    if (rank != 0) {
+    counter++;
+    if (rank != 0)
         if (MIMPI_Recv(&b, 1, graph_up[rank], -counter) == MIMPI_ERROR_REMOTE_FINISHED)
             return MIMPI_ERROR_REMOTE_FINISHED;
-    }
+    
     // Sending message to processes below.
     for (int i = n_processes - 1; i >= 0; i--) {
         if (graph_down[rank][i] == 0) continue;
-//        printf("wysylam2: %d do: %d\n", rank, i);
-        fflush(stdout);
         if (MIMPI_Send(example_message, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
             return MIMPI_ERROR_REMOTE_FINISHED;
     }
     return MIMPI_SUCCESS;
 }
 
+int down(int x, int root) {
+    return (x - root + n_processes) % n_processes;
+}
+int up(int x, int root) {
+    return (x + root) % n_processes;
+}
+
 MIMPI_Retcode MIMPI_Bcast(void *data, int count, int root) {
-    if (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED) 
-        return MIMPI_ERROR_REMOTE_FINISHED;
     if (root >= n_processes || root < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    
+
+    // Waiting for messages from processes below.
     counter++;
-    if (root == rank) {
-        for (int i = 0; i < n_processes; i++) {
-            if (i == rank) continue;
-            MIMPI_Send(data, count, i, -counter);
-        }
+    char b;
+    for (int i = 0; i < n_processes; i++) {
+        if (graph_down[down(rank, root)][down(i, root)] == 0) continue;
+        if (MIMPI_Recv(&b, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
     }
-    else 
-        MIMPI_Recv(data, count, root, -counter);
+
+    // Sending message to process above.
+    if (down(rank, root) != 0) {
+        int res = MIMPI_Send(example_message, 1, up(graph_up[down(rank, root)], root), -counter);
+        if (res == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    // Waiting for message from process above.
+    counter++;
+    if (down(rank, root) != 0) { 
+        int res = MIMPI_Recv(data, count, up(graph_up[down(rank, root)], root), -counter);
+        if (res == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    
+    // Sending message to processes below.
+    for (int i = n_processes - 1; i >= 0; i--) {
+        if (graph_down[down(rank, root)][down(i, root)] == 0) continue;
+        if (MIMPI_Send(data, count, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
     return MIMPI_SUCCESS;
 }
 
