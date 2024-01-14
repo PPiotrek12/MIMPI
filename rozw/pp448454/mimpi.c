@@ -156,7 +156,6 @@ void* wait_for_messages(void* arg) {
         if(if_waiting_for_message && w_count == count && w_source == i && 
             (w_tag == tag || w_tag == MIMPI_ANY_TAG)) 
             ASSERT_SYS_OK(pthread_cond_signal(&waiting_for_message_cond));
-
         ASSERT_SYS_OK(pthread_mutex_unlock(&my_mutex));
     }
     return NULL;
@@ -236,14 +235,19 @@ MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) 
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
     if (destination >= n_processes || destination < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
-    
-    if (write_whole_message(from_me[destination], &count, 4) == MIMPI_ERROR_REMOTE_FINISHED)
+
+    int total_size = 4 + 4 + count;
+    void *message = malloc(total_size);
+    if (message == NULL)
+        ASSERT_SYS_OK(-1);
+    memcpy(message, &count, 4);
+    memcpy(message + 4, &tag, 4);
+    memcpy(message + 8, data, count);
+
+    int res = write_whole_message(from_me[destination], message, total_size);
+    free(message);
+    if (res == MIMPI_ERROR_REMOTE_FINISHED)
         return MIMPI_ERROR_REMOTE_FINISHED;
-    if (write_whole_message(from_me[destination], &tag, 4) == MIMPI_ERROR_REMOTE_FINISHED)
-        return MIMPI_ERROR_REMOTE_FINISHED;
-    if (write_whole_message(from_me[destination], data, count) == MIMPI_ERROR_REMOTE_FINISHED)
-        return MIMPI_ERROR_REMOTE_FINISHED;
-    
     return MIMPI_SUCCESS;
 }
 
