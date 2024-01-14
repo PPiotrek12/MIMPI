@@ -13,14 +13,22 @@
 
 
 int main(int argc, char **argv) {
-    int to_break = atoi(argv[1]);
     MIMPI_Init(false);
-    if (MIMPI_World_rank() != to_break) {
-        printf("%d\n", (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED));
-    } else {
-        printf("%d breaking barrier\n", MIMPI_World_rank());    
-        sleep(1);
+    int rank = MIMPI_World_rank();
+
+
+    int const process_rank = MIMPI_World_rank();
+    int const size_of_cluster = MIMPI_World_size();
+
+    for (int i = 0; i < size_of_cluster; i++)
+    {
+        if (i == process_rank)
+        {
+            printf("Hello World from process %d of %d\n", process_rank, size_of_cluster);
+            fflush(stdout);
+        }
+        MIMPI_Barrier();
     }
+
     MIMPI_Finalize();
-    return test_success();
 }

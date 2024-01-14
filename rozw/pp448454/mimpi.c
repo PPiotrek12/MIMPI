@@ -8,7 +8,7 @@
 #include <pthread.h>
 #include "channel.h"
 #include <errno.h>
-
+const int N_PROCESSES = 16;
 int rank, n_processes;
 int *to_me, *from_me;
 pthread_mutex_t my_mutex; 
@@ -283,17 +283,17 @@ void set_descriptors() {
 }
 
 void create_graph() {
-    graph_up = (void *) malloc(n_processes * sizeof(int));
+    graph_up = (void *) malloc(N_PROCESSES * sizeof(int));
     if (graph_up == NULL) ASSERT_SYS_OK(-1);
-    graph_up[1] = 0, graph_up[2] = 0, graph_up[3] = 2;
+    graph_up[0] = -1, graph_up[1] = 0, graph_up[2] = 0, graph_up[3] = 2;
     graph_up[4] = 0, graph_up[5] = 4, graph_up[6] = 4, graph_up[7] = 6;
     graph_up[8] = 0, graph_up[9] = 8, graph_up[10] = 8, graph_up[11] = 10;
     graph_up[12] = 8, graph_up[13] = 12, graph_up[14] = 12, graph_up[15] = 14;
 
-    graph_down = (void *) malloc(n_processes * sizeof(int*));
+    graph_down = (void *) malloc(N_PROCESSES * sizeof(int*));
     if (graph_down == NULL) ASSERT_SYS_OK(-1);
     for(int i = 0; i < n_processes; i++) {
-        graph_down[i] = (void *) malloc(n_processes * sizeof(int));
+        graph_down[i] = (void *) malloc(N_PROCESSES * sizeof(int));
         if (graph_down[i] == NULL) ASSERT_SYS_OK(-1);
         for(int j = 0; j < n_processes; j++) {
             if (graph_up[i] == j)
@@ -369,7 +369,6 @@ void MIMPI_Finalize() {
     ASSERT_ZERO(pthread_mutex_destroy(&my_mutex));
     ASSERT_ZERO(pthread_cond_destroy(&waiting_for_message_cond));
     channels_finalize();
-    
 }
 
 
@@ -389,15 +388,38 @@ int MIMPI_World_rank() {
 int counter = 0;
 MIMPI_Retcode MIMPI_Barrier() {
     counter++;
-    for (int i = 0; i < n_processes; i++) {
-        if (i == rank) continue;
-        if (MIMPI_Send(example_message, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
-            return MIMPI_ERROR_REMOTE_FINISHED;
-    }
+
+    // Waiting for messages from processes below.
     char b;
     for (int i = 0; i < n_processes; i++) {
-        if (i == rank) continue;
+        if (graph_down[rank][i] == 0) continue;
         if (MIMPI_Recv(&b, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+        if(rank  == 0) {
+            //printf("UWAGA:::::: 0 otrzymalo wiadomosc od: %d\n", i);
+            fflush(stdout);
+        }
+            
+    }
+    // Sending message to process above.
+    if (rank != 0) {
+        //printf("wysylam: %d do: %d\n", rank, graph_up[rank]);
+        fflush(stdout);
+        if (MIMPI_Send(example_message, 1, graph_up[rank], -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    counter++;
+    // Waiting for message from process above.
+    if (rank != 0) {
+        if (MIMPI_Recv(&b, 1, graph_up[rank], -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    // Sending message to processes below.
+    for (int i = n_processes - 1; i >= 0; i--) {
+        if (graph_down[rank][i] == 0) continue;
+//        printf("wysylam2: %d do: %d\n", rank, i);
+        fflush(stdout);
+        if (MIMPI_Send(example_message, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
             return MIMPI_ERROR_REMOTE_FINISHED;
     }
     return MIMPI_SUCCESS;

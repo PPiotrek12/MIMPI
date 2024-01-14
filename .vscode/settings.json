@@ -9,6 +9,7 @@
         "wait.h": "c",
         "test.h": "c",
         "type_traits": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "errno.h": "c"
     }
 }
