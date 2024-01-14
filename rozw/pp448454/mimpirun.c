@@ -13,7 +13,7 @@ void set_channel_descriptors(int n) {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             if (i == j) continue;
-            char i_str[10], j_str[10], read_str[10], write_str[10];
+            char i_str[12], j_str[12], read_str[12], write_str[12];
             int read = counter++, write = counter++;
 
             sprintf(i_str, "%d", i);
@@ -51,7 +51,7 @@ void set_channel_descriptors(int n) {
 
 int run_processes(int n, char* path, int argc, char** argv) {
     for (int i = 0; i < n; i++) {
-        char rank[10];
+        char rank[12];
         sprintf(rank, "%d", i);
         setenv("MIMPI_RANK", rank, 1);
     
