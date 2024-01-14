@@ -13,12 +13,6 @@ MIMPIRUN_SRC := $(MIMPI_COMMON_SRC) mimpirun.c
 MIMPI_SRC := $(MIMPI_COMMON_SRC) mimpi.c mimpi.h
 
 all: mimpirun $(EXAMPLES) $(TESTS)
-all: test1
-
-test1: test1.c $(MIMPI_SRC)
-examples_build/%: examples/%.c $(MIMPI_SRC)
-	mkdir -p examples_build
-	gcc $(CFLAGS) -o $@ $(filter %.c,$^) -lpthread
 
 mimpirun: $(MIMPIRUN_SRC)
 	gcc $(CFLAGS) -o $@ $(filter %.c,$^)

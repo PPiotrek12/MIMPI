@@ -11,6 +11,7 @@ int main(int argc, char **argv)
     MIMPI_Init(false);
 
     int const world_rank = MIMPI_World_rank();
+
     assert(argc >= 3);
 
     int size = atoi(argv[1]);
@@ -29,15 +30,14 @@ int main(int argc, char **argv)
         free(data);
     }
     else
-    {        char *data_s = (char *)malloc((size_t)size * (size_t)sizeof(char));
-        
+    {
+        char *data_s = (char *)malloc((size_t)size * (size_t)sizeof(char));
         for (int i = 0; i < size; i++)
         {
             data_s[i] = (uint8_t)((i ^ 123456) % 117);
         }
 
-        
-        char *data = (char *)malloc((size_t)size * (size_t)sizeof(char));        
+        char *data = (char *)malloc((size_t)size * (size_t)sizeof(char));
         ASSERT_MIMPI_OK(MIMPI_Reduce(data_s, data, size, MIMPI_SUM, from));
 
         for (int i = 0; i < size; i++)
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
             uint8_t s = (uint8_t)((i ^ 123456) % 117), sum = 0;
             for (int j = 0; j < MIMPI_World_size(); j++)
                 sum += s;
-            assert(sum == (uint8_t)data[i]);
+            assert((uint8_t)data[i] == sum);
         }
         free(data_s);
         free(data);
