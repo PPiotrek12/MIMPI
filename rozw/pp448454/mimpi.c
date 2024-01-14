@@ -9,7 +9,6 @@
 #include "channel.h"
 #include <errno.h>
 
-const int N_PROCESSES = 16;
 int rank, n_processes;
 int *to_me, *from_me;
 pthread_mutex_t my_mutex; 
@@ -20,7 +19,6 @@ bool *finished;
 bool message_found = false;
 char *example_message;
 int graph_up[20], graph_down[20][20];
-
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -43,8 +41,7 @@ struct list_elem {
 void list_init() {
     head = (void *) malloc(sizeof(struct list_elem));
     tail = (void *) malloc(sizeof(struct list_elem));
-    if (head == NULL || tail == NULL)
-        ASSERT_SYS_OK(-1);
+    if (head == NULL || tail == NULL) ASSERT_SYS_OK(-1);
     head->next = tail;
     head->prev = NULL;
     tail->next = NULL;
@@ -280,8 +277,8 @@ void create_graph() {
     graph_up[8] = 0, graph_up[9] = 8, graph_up[10] = 8, graph_up[11] = 10;
     graph_up[12] = 8, graph_up[13] = 12, graph_up[14] = 12, graph_up[15] = 14;
 
-    for(int i = 0; i < N_PROCESSES; i++) {
-        for(int j = 0; j < N_PROCESSES; j++) {
+    for(int i = 0; i < n_processes; i++) {
+        for(int j = 0; j < n_processes; j++) {
             if (graph_up[i] == j)
                 graph_down[j][i] = 1;
             else
@@ -497,9 +494,3 @@ MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MI
     }
     return MIMPI_SUCCESS;
 }
-
-
-
-
-// TODO : sprawdzic czy na pewno wszedzie sa asserty
-// TODO: japierdoleee sprawdzac wszedzie czy sa mutexy kurwa no

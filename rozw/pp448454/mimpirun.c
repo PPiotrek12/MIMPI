@@ -5,7 +5,6 @@
 #include <sys/wait.h>
 #include <string.h>
 #include "channel.h"
-
 #include "mimpi_common.h"
 
 void set_channel_descriptors(int n) {
@@ -48,7 +47,6 @@ void set_channel_descriptors(int n) {
     setenv("MIMPI_DESCRIPTOR_COUNTER", counter_str, 1);
 }
 
-
 int run_processes(int n, char* path, int argc, char** argv) {
     for (int i = 0; i < n; i++) {
         char rank[12];
@@ -64,7 +62,7 @@ int run_processes(int n, char* path, int argc, char** argv) {
                 args[j - 2] = argv[j];
             }
             args[argc - 2] = NULL;
-            ASSERT_SYS_OK(execvp(path, args));  // TODO : czy to jest ok - cos mialo sie znajdowac w PATH?
+            ASSERT_SYS_OK(execvp(path, args));
             return 1;
         }
     }
@@ -81,16 +79,11 @@ int run_processes(int n, char* path, int argc, char** argv) {
 int main(int argc, char **argv) {
     if (argc < 2) 
         return 1;
-    
     int n = atoi(argv[1]);
     char* path = argv[2];
-
     setenv("MIMPI_N", argv[1], 1);
-
     set_channel_descriptors(n);
-
     if(run_processes(n, path, argc, argv))
         return 1;
-
     return 0;
 }
