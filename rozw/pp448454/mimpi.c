@@ -18,6 +18,7 @@ int *args;
 bool *finished;
 bool message_found = false;
 char *example_message;
+int **graph_up, **graph_down;
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -91,16 +92,6 @@ void destroy_list() {
     free(head);
     free(tail);
     ASSERT_ZERO(pthread_mutex_unlock(&my_mutex));
-}
-
-void free_memory() {
-    free(threads);
-    free(args);
-    free(to_me);
-    free(from_me);
-    free(example_message);
-    free(finished);
-    destroy_list();
 }
 
 
@@ -291,25 +282,51 @@ void set_descriptors() {
     
 }
 
+void create_graph() {
+    graph_up = (void *) malloc(n_processes * sizeof(int*));
+    if (graph_up == NULL) ASSERT_SYS_OK(-1);
+    for(int i = 0; i < n_processes; i++) {
+        graph_up[i] = (void *) malloc(n_processes * sizeof(int));
+        if (graph_up[i] == NULL) ASSERT_SYS_OK(-1);
+        for(int j = 0; j < n_processes; j++)
+            graph_up[i][j] = 0;
+    }
+    graph_up[1][0] = graph_up[2][0] = graph_up[3][2] = graph_up[4][0] = graph_up[5][4] =
+    graph_up[6][4] = graph_up[7][6] = graph_up[8][0] = graph_up[9][8] = graph_up[10][8] =
+    graph_up[11][10] = graph_up[12][8] = graph_up[13][12] = graph_up[14][12] = graph_up[15][14] = 0;
+
+    graph_down = (void *) malloc(n_processes * sizeof(int*));
+    if (graph_down == NULL) ASSERT_SYS_OK(-1);
+    for(int i = 0; i < n_processes; i++) {
+        graph_down[i] = (void *) malloc(n_processes * sizeof(int));
+        if (graph_down[i] == NULL) ASSERT_SYS_OK(-1);
+        for(int j = 0; j < n_processes; j++) {
+            if (graph_up[i][j] == 1)
+                graph_down[j][i] = 1;
+            else
+                graph_down[i][j] = 0;
+        }
+    }
+}
+
 void MIMPI_Init(bool enable_deadlock_detection) {
     channels_init();
     rank = atoi(getenv("MIMPI_RANK"));
     n_processes = atoi(getenv("MIMPI_N"));  
     set_descriptors();
+    create_graph();
     list_init();
 
     ASSERT_ZERO(pthread_mutex_init(&my_mutex, NULL));
     ASSERT_ZERO(pthread_cond_init(&waiting_for_message_cond, NULL));
 
     finished = (void *) malloc(n_processes * sizeof(bool));
-    if (finished == NULL)
-        ASSERT_SYS_OK(-1);
+    if (finished == NULL) ASSERT_SYS_OK(-1);
     for(int i = 0; i < n_processes; i++)
         finished[i] = false;
 
     example_message = (void *) malloc(1);
-    if (example_message == NULL)
-        ASSERT_SYS_OK(-1);
+    if (example_message == NULL) ASSERT_SYS_OK(-1);
     *example_message = 'a';
 
     // Creating threads.
@@ -327,6 +344,22 @@ void MIMPI_Init(bool enable_deadlock_detection) {
 
 
 // ========================================= FINALIZATION =========================================
+void free_memory() {
+    free(threads);
+    free(args);
+    free(to_me);
+    free(from_me);
+    free(example_message);
+    free(finished);
+    destroy_list();
+    for(int i = 0; i < n_processes; i++) {
+        free(graph_up[i]);
+        free(graph_down[i]);
+    }
+    free(graph_up);
+    free(graph_down);
+}
+
 void MIMPI_Finalize() {
     // Closing mine descriptors.
     for(int i = 0; i < n_processes; i++) {
