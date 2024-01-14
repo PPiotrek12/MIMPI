@@ -17,13 +17,13 @@ int main(int argc, char **argv) {
     int rank = MIMPI_World_rank();
 
     if (rank == 0) {
-        char *data = "Hello world!";
-        MIMPI_Bcast(data, 11, 0);
+        char *data = NULL;
+        MIMPI_Bcast(data, 0, 0);
         printf("wyslalem\n");
     }
     else {
         char *data = malloc(11);
-        MIMPI_Bcast(data, 11, 0);
+        MIMPI_Bcast(data, 0, 0);
         printf("Received: %s\n", data);
     }
 

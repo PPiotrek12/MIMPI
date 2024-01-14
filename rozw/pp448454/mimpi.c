@@ -19,7 +19,8 @@ int *args;
 bool *finished;
 bool message_found = false;
 char *example_message;
-int *graph_up, **graph_down;
+int graph_up[20], graph_down[20][20];
+
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -119,13 +120,12 @@ void* wait_for_messages(void* arg) {
         void *data = NULL;
         if (ret != MIMPI_ERROR_REMOTE_FINISHED) { // If there is any data to read.
             if (read_whole_message(to_me[i], &tag, 4) == -1) break;
-
-            data = (void *) malloc(count);  // TODO: przetestowac wysylanie 0 bajtow - czy malloc nie zwroci null?
-            if (data == NULL) ASSERT_SYS_OK(-1);
-
-            if (count != 0)
+            if (count != 0) {
+                data = (void *) malloc(count);
+                if (data == NULL) ASSERT_SYS_OK(-1);
                 if (read_whole_message(to_me[i], data, count) == -1) 
                     break;
+            }
         }
 
         ASSERT_SYS_OK(pthread_mutex_lock(&my_mutex));
@@ -167,7 +167,7 @@ int search_for_message(void *data, int count, int source, int tag) {
 MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
     if (source == rank)
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
-    if (source >= n_processes || source < 0) // TODO: czy to jest ok?
+    if (source >= n_processes || source < 0)
         return MIMPI_ERROR_NO_SUCH_RANK;
 
     ASSERT_SYS_OK(pthread_mutex_lock(&my_mutex));
@@ -219,10 +219,10 @@ int write_whole_message(int fd, const void *data, int count) {
 MIMPI_Retcode MIMPI_Send(void const *data, int count, int destination, int tag) {
     if (destination == rank)
         return MIMPI_ERROR_ATTEMPTED_SELF_OP;
-    if (destination >= n_processes || destination < 0) // TODO: czy to jest ok?
+    if (destination >= n_processes || destination < 0)
         return MIMPI_ERROR_NO_SUCH_RANK;
 
-    int total_size = 4 + 4 + count;
+    long long total_size = 4 + 4 + (long long)count;
     void *message = malloc(total_size);
     if (message == NULL)
         ASSERT_SYS_OK(-1);
@@ -275,19 +275,13 @@ void set_descriptors() {
 }
 
 void create_graph() {
-    graph_up = (void *) malloc(N_PROCESSES * sizeof(int));
-    if (graph_up == NULL) ASSERT_SYS_OK(-1);
     graph_up[0] = -1, graph_up[1] = 0, graph_up[2] = 0, graph_up[3] = 2;
     graph_up[4] = 0, graph_up[5] = 4, graph_up[6] = 4, graph_up[7] = 6;
     graph_up[8] = 0, graph_up[9] = 8, graph_up[10] = 8, graph_up[11] = 10;
     graph_up[12] = 8, graph_up[13] = 12, graph_up[14] = 12, graph_up[15] = 14;
 
-    graph_down = (void *) malloc(N_PROCESSES * sizeof(int*));
-    if (graph_down == NULL) ASSERT_SYS_OK(-1);
-    for(int i = 0; i < n_processes; i++) {
-        graph_down[i] = (void *) malloc(N_PROCESSES * sizeof(int));
-        if (graph_down[i] == NULL) ASSERT_SYS_OK(-1);
-        for(int j = 0; j < n_processes; j++) {
+    for(int i = 0; i < N_PROCESSES; i++) {
+        for(int j = 0; j < N_PROCESSES; j++) {
             if (graph_up[i] == j)
                 graph_down[j][i] = 1;
             else
@@ -337,10 +331,6 @@ void free_memory() {
     free(example_message);
     free(finished);
     destroy_list();
-    for(int i = 0; i < N_PROCESSES; i++)
-        free(graph_down[i]);
-    free(graph_down);
-    free(graph_up);
 }
 
 void MIMPI_Finalize() {
@@ -412,7 +402,7 @@ int up(int x, int root) {
 }
 
 MIMPI_Retcode MIMPI_Bcast(void *data, int count, int root) {
-    if (root >= n_processes || root < 0) // TODO: czy to jest ok?
+    if (root >= n_processes || root < 0)
         return MIMPI_ERROR_NO_SUCH_RANK;
 
     // Waiting for messages from processes below.
@@ -461,7 +451,7 @@ u_int8_t ope(int op, u_int8_t a, u_int8_t b) {
 }
 
 MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MIMPI_Op op, int root ) {
-    if (root >= n_processes || root < 0) // TODO: czy to jest ok?
+    if (root >= n_processes || root < 0)
         return MIMPI_ERROR_NO_SUCH_RANK;
 
     // Waiting for messages from processes below.
@@ -512,4 +502,4 @@ MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MI
 
 
 // TODO : sprawdzic czy na pewno wszedzie sa asserty
-/// japierdoleee sprawdzac wszedzie czy sa mutexy kurwa no
+// TODO: japierdoleee sprawdzac wszedzie czy sa mutexy kurwa no
