@@ -18,7 +18,7 @@ int *args;
 bool *finished;
 bool message_found = false;
 char *example_message;
-int **graph_up, **graph_down;
+int *graph_up, **graph_down;
 
 bool if_waiting_for_message = false;
 int w_tag, w_count, w_source;
@@ -283,17 +283,12 @@ void set_descriptors() {
 }
 
 void create_graph() {
-    graph_up = (void *) malloc(n_processes * sizeof(int*));
+    graph_up = (void *) malloc(n_processes * sizeof(int));
     if (graph_up == NULL) ASSERT_SYS_OK(-1);
-    for(int i = 0; i < n_processes; i++) {
-        graph_up[i] = (void *) malloc(n_processes * sizeof(int));
-        if (graph_up[i] == NULL) ASSERT_SYS_OK(-1);
-        for(int j = 0; j < n_processes; j++)
-            graph_up[i][j] = 0;
-    }
-    graph_up[1][0] = graph_up[2][0] = graph_up[3][2] = graph_up[4][0] = graph_up[5][4] =
-    graph_up[6][4] = graph_up[7][6] = graph_up[8][0] = graph_up[9][8] = graph_up[10][8] =
-    graph_up[11][10] = graph_up[12][8] = graph_up[13][12] = graph_up[14][12] = graph_up[15][14] = 0;
+    graph_up[1] = 0, graph_up[2] = 0, graph_up[3] = 2;
+    graph_up[4] = 0, graph_up[5] = 4, graph_up[6] = 4, graph_up[7] = 6;
+    graph_up[8] = 0, graph_up[9] = 8, graph_up[10] = 8, graph_up[11] = 10;
+    graph_up[12] = 8, graph_up[13] = 12, graph_up[14] = 12, graph_up[15] = 14;
 
     graph_down = (void *) malloc(n_processes * sizeof(int*));
     if (graph_down == NULL) ASSERT_SYS_OK(-1);
@@ -301,7 +296,7 @@ void create_graph() {
         graph_down[i] = (void *) malloc(n_processes * sizeof(int));
         if (graph_down[i] == NULL) ASSERT_SYS_OK(-1);
         for(int j = 0; j < n_processes; j++) {
-            if (graph_up[i][j] == 1)
+            if (graph_up[i] == j)
                 graph_down[j][i] = 1;
             else
                 graph_down[i][j] = 0;
@@ -352,10 +347,8 @@ void free_memory() {
     free(example_message);
     free(finished);
     destroy_list();
-    for(int i = 0; i < n_processes; i++) {
-        free(graph_up[i]);
+    for(int i = 0; i < n_processes; i++)
         free(graph_down[i]);
-    }
     free(graph_up);
     free(graph_down);
 }
