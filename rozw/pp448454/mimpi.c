@@ -472,28 +472,50 @@ u_int8_t ope(int op, u_int8_t a, u_int8_t b) {
 }
 
 MIMPI_Retcode MIMPI_Reduce(void const *send_data, void *recv_data, int count, MIMPI_Op op, int root ) {
-    if (MIMPI_Barrier() == MIMPI_ERROR_REMOTE_FINISHED) 
-        return MIMPI_ERROR_REMOTE_FINISHED;
-
     if (root >= n_processes || root < 0) // TODO: czy to jest ok?
         return MIMPI_ERROR_NO_SUCH_RANK;
 
+    // Waiting for messages from processes below.
     counter++;
-    if (rank == root) {
-        memcpy(recv_data, send_data, count);
-        for (int i = 0; i < n_processes; i++) {
-            if (i == rank) continue;
-            u_int8_t *data = (void *) malloc(count);
-            if (data == NULL)
-                ASSERT_SYS_OK(-1);
-            MIMPI_Recv(data, count, i, -counter);
-            for (int j = 0; j < count; j++)
-                *(u_int8_t *)((u_int8_t *)recv_data + j) = ope(op, ((u_int8_t *)recv_data)[j], data[j]);
-            free(data);
-        }
+    void *b = (void *) malloc(count);
+    if (b == NULL) ASSERT_SYS_OK(-1);
+    memcpy(b, send_data, count);
+
+    for (int i = 0; i < n_processes; i++) {
+        if (graph_down[down(rank, root)][down(i, root)] == 0) continue;
+
+        void *recv_data = (void *) malloc(count);
+        if (recv_data == NULL) ASSERT_SYS_OK(-1);
+
+        if (MIMPI_Recv(recv_data, count, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+        for (int j = 0; j < count; j++)
+            *(u_int8_t *)((u_int8_t *)b + j) = ope(op, ((u_int8_t *)recv_data)[j], ((u_int8_t *)b)[j]);
+        free(recv_data);
     }
-    else 
-        MIMPI_Send(send_data, count, root, -counter);
+
+    // Sending message to process above.
+    if (down(rank, root) != 0) {
+        int res = MIMPI_Send(b, count, up(graph_up[down(rank, root)], root), -counter);
+        if (res == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
+    if (down(rank, root) == 0)
+        memcpy(recv_data, b, count);
+    free(b);
+
+    // Waiting for message from process above.
+    counter++;
+    if (rank != 0)
+        if (MIMPI_Recv(&b, 1, graph_up[rank], -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    
+    // Sending message to processes below.
+    for (int i = n_processes - 1; i >= 0; i--) {
+        if (graph_down[rank][i] == 0) continue;
+        if (MIMPI_Send(example_message, 1, i, -counter) == MIMPI_ERROR_REMOTE_FINISHED)
+            return MIMPI_ERROR_REMOTE_FINISHED;
+    }
     return MIMPI_SUCCESS;
 }
 
