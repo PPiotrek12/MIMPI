@@ -198,12 +198,12 @@ MIMPI_Retcode MIMPI_Recv(void *data, int count, int source, int tag) {
 
 
 // ======================================= SENDING MESSAGES =======================================
-int write_whole_message(int fd, const void *data, int count) {
-    int written_bytes = 0;
+int write_whole_message(int fd, const void *data, long long count) {
+    long long written_bytes = 0;
     while(written_bytes < count) {
-        int to_write = count - written_bytes;
-        int written_now;
-        int res = written_now = chsend(fd, data + written_bytes, to_write);
+        long long to_write = count - written_bytes;
+        long long written_now;
+        long long res = written_now = chsend(fd, data + written_bytes, to_write);
         if(res == -1 && errno == EPIPE) // Process finished.
             return MIMPI_ERROR_REMOTE_FINISHED;
         else if (res == -1)
