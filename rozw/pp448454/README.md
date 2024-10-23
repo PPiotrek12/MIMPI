@@ -1,5 +1,1 @@
-# Second laboratory assignment
-
-This repository contains materials for second laboratory assignment on PW course on MIMUW in 2023.
-
-Assignment description can be found in [assignment.md](assignment.md).
+This project is an implementation of a small, slightly modified fragment of MPI, referred to as MIMPI. It involves writing both a program that runs parallel computations and a library according to the specification provided. The original problem description can be found here.
